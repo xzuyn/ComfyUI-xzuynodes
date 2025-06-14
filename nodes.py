@@ -7,7 +7,6 @@ from comfy_api.util import VideoComponents
 
 class LastFrameNode(ComfyNodeABC):
     """Extracts the last frame from a selected video file."""
-    CATEGORY = "image/video"
 
     @classmethod
     def INPUT_TYPES(cls):
@@ -21,6 +20,7 @@ class LastFrameNode(ComfyNodeABC):
     RETURN_TYPES = (IO.IMAGE,)
     RETURN_NAMES = ("image",)
     FUNCTION = "extract_last_frame"
+    CATEGORY = "xzuynodes"
 
     def extract_last_frame(self, file: str):
         path = folder_paths.get_annotated_filepath(file)
