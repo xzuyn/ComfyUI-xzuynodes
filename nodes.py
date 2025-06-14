@@ -2,7 +2,6 @@ import os
 from comfy.comfy_types import IO, ComfyNodeABC
 import folder_paths
 from comfy_api.input_impl import VideoFromFile
-from comfy_api.util import VideoComponents
 
 
 class LastFrameNode(ComfyNodeABC):
@@ -11,9 +10,11 @@ class LastFrameNode(ComfyNodeABC):
     @classmethod
     def INPUT_TYPES(cls):
         files = folder_paths.filter_files_content_types(
-            [f for f in os.listdir(folder_paths.get_input_directory())
-             if os.path.isfile(os.path.join(folder_paths.get_input_directory(), f))],
-            ["video"]
+            [
+                f for f in os.listdir(folder_paths.get_input_directory())
+                if os.path.isfile(os.path.join(folder_paths.get_input_directory(), f))
+            ],
+            ["video"],
         )
         return {"required": {"file": (sorted(files), {"video_upload": True})}}
 
