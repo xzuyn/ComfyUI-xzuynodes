@@ -1,5 +1,8 @@
 import os
 import folder_paths
+import logging
+import torch
+from tqdm import tqdm
 
 from nodes import MAX_RESOLUTION
 from comfy_api.input_impl import VideoFromFile
@@ -83,7 +86,7 @@ highest dimension.
 """
 
     def resize(self, image, width, height, keep_proportion, upscale_method, divisible_by, 
-               width_input=None, height_input=None, get_image_size=None, crop="disabled"):
+               width_input=None, height_input=None, get_image_size=None, crop="center"):
         B, H, W, C = image.shape
 
         if width_input:
@@ -123,11 +126,108 @@ highest dimension.
         return(image, image.shape[2], image.shape[1],)
 
 
+class CLIPTextEncodeAveraged(ComfyNodeABC):
+    """Uses code from CLIPTextEncode and ConditioningAverage nodes to split up a prompt and then average the conditioning of all splits."""
+
+    @classmethod
+    def INPUT_TYPES(s) -> dict:
+        return {
+            "required": {
+                "text": (IO.STRING, {
+                    "multiline": True,
+                    "dynamicPrompts": True,
+                    "tooltip": "The text to be encoded."
+                }),
+                "clip": (IO.CLIP, {"tooltip": "The CLIP model used for encoding the text."}),
+                "split_string": (["\\n", ",", "."], {
+                    "tooltip": "Delimiter on which to split the prompt before encoding."
+                }),
+            }
+        }
+
+    RETURN_TYPES = (IO.CONDITIONING,)
+    OUTPUT_TOOLTIPS = ("An averaged conditioning over all text segments.",)
+    FUNCTION = "encode"
+    CATEGORY = "xzuynodes"
+    DESCRIPTION = (
+        "Splits the prompt on your delimiter, encodes each piece, "
+        "then pads & averages the resulting conditioning layers."
+    )
+
+    def encode(self, clip, text, split_string):
+        if split_string == "\\n":
+            fixed_split_string = "\n"
+        else:
+            fixed_split_string = split_string
+        if clip is None:
+            raise RuntimeError(
+                "ERROR: clip input is invalid: None\n\n"
+                "If the clip is from a checkpoint loader node your checkpoint "
+                "does not contain a valid clip or text encoder model."
+            )
+
+        segs = [s.strip() for s in text.split(fixed_split_string) if s.strip()]
+        if not segs:
+            # fallback: full prompt
+            return (clip.encode_from_tokens_scheduled(clip.tokenize(text)),)
+
+        conds = []
+        for seg in tqdm(segs, desc="Encoding prompt segments"):
+            try:
+                tok = clip.tokenize(seg)
+                conds.append(clip.encode_from_tokens_scheduled(tok))
+            except Exception as e:
+                logging.warning(f"CLIP encode failed on segment {seg!r}: {e}")
+
+        if not conds:
+            # if *all* encodings failed, fallback
+            return (clip.encode_from_tokens_scheduled(clip.tokenize(text)),)
+
+        num_layers = len(conds[0])
+        averaged = []
+        for layer_idx in range(num_layers):
+            # collect tensors and mets
+            tensors = []
+            pooled = []
+            for cond in conds:
+                t, meta = cond[layer_idx]
+                tensors.append(t)
+                pooled.append(meta.get("pooled_output", None))
+
+            # pad tensors to max seq‐length
+            seq_lengths = [t.shape[1] for t in tensors]
+            max_S = max(seq_lengths)
+            padded = []
+            for t in tensors:
+                B, S, D = t.shape
+                if S < max_S:
+                    pad = torch.zeros((B, max_S - S, D), device=t.device, dtype=t.dtype)
+                    t = torch.cat([t, pad], dim=1)
+                padded.append(t)
+
+            # stack & mean
+            stacked = torch.stack(padded, dim=0)
+            mean_t = torch.mean(stacked, dim=0)
+
+            # average pooled_output if present
+            valid_p = [p for p in pooled if p is not None]
+            meta_out = {}
+            if valid_p:
+                p_stack = torch.stack(valid_p, dim=0)
+                meta_out["pooled_output"] = torch.mean(p_stack, dim=0)
+
+            averaged.append([mean_t, meta_out])
+
+        return (averaged,)
+
+
 NODE_CLASS_MAPPINGS = {
     "LastFrameNode": LastFrameNode,
     "ImageResizeKJ": ImageResizeKJ,
+    "CLIPTextEncodeAveraged": CLIPTextEncodeAveraged,
 }
 NODE_DISPLAY_NAME_MAPPINGS = {
     "LastFrameNode": "Last Frame Extractor",
     "ImageResizeKJ": "Resize Image (Original KJ)",
+    "CLIPTextEncodeAveraged": "CLIP Text Encode (Averaged)",
 }
