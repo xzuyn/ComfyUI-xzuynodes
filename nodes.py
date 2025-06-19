@@ -178,7 +178,7 @@ class CLIPTextEncodeAveraged(ComfyNodeABC):
                 conds.append(clip.encode_from_tokens_scheduled(tok))
             except Exception as e:
                 logging.warning(f"CLIP encode failed on segment {seg!r}: {e}")
-        pbar.update(1)
+            pbar.update(1)
 
         if not conds:
             # if *all* encodings failed, fallback
