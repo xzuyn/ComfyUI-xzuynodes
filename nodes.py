@@ -221,13 +221,75 @@ class CLIPTextEncodeAveraged(ComfyNodeABC):
         return (averaged,)
 
 
+class CLIPTextEncodeCombined(ComfyNodeABC):
+    """Uses code from CLIPTextEncode and ConditioningCombine nodes to split up a prompt and then combine the conditioning of all splits."""
+
+    @classmethod
+    def INPUT_TYPES(s) -> dict:
+        return {
+            "required": {
+                "text": (IO.STRING, {
+                    "multiline": True,
+                    "dynamicPrompts": True,
+                    "tooltip": "The text to be encoded."
+                }),
+                "clip": (IO.CLIP, {"tooltip": "The CLIP model used for encoding the text."}),
+                "split_string": (["\\n", ",", "."], {
+                    "tooltip": "Delimiter on which to split the prompt before encoding."
+                }),
+            }
+        }
+
+    RETURN_TYPES = (IO.CONDITIONING,)
+    OUTPUT_TOOLTIPS = ("A combined conditioning of all text segments.",)
+    FUNCTION = "encode"
+    CATEGORY = "xzuynodes"
+    DESCRIPTION = (
+        "Splits the prompt on your delimiter, encodes each piece, "
+        "then combines all resulting conditioning lists."
+    )
+
+    def encode(self, clip, text, split_string):
+        if split_string == "\\n":
+            fixed_split_string = "\n"
+        else:
+            fixed_split_string = split_string
+        if clip is None:
+            raise RuntimeError(
+                "ERROR: clip input is invalid: None\n\n"
+                "If the clip is from a checkpoint loader node your checkpoint "
+                "does not contain a valid clip or text encoder model."
+            )
+
+        segs = [s.strip() for s in text.split(fixed_split_string) if s.strip()]
+        if not segs:
+            # fallback: full prompt
+            return (clip.encode_from_tokens_scheduled(clip.tokenize(text)),)
+
+        conds = []
+        for seg in tqdm(segs, desc="Encoding prompt segments"):
+            try:
+                tok = clip.tokenize(seg)
+                conds.append(clip.encode_from_tokens_scheduled(tok))
+            except Exception as e:
+                logging.warning(f"CLIP encode failed on segment {seg!r}: {e}")
+
+        if not conds:
+            # if *all* encodings failed, fallback
+            return (clip.encode_from_tokens_scheduled(clip.tokenize(text)),)
+        else:
+            return (sum(conds, []),)
+
+
 NODE_CLASS_MAPPINGS = {
     "LastFrameNode": LastFrameNode,
     "ImageResizeKJ": ImageResizeKJ,
     "CLIPTextEncodeAveraged": CLIPTextEncodeAveraged,
+    "CLIPTextEncodeCombined": CLIPTextEncodeCombined,
 }
 NODE_DISPLAY_NAME_MAPPINGS = {
     "LastFrameNode": "Last Frame Extractor",
     "ImageResizeKJ": "Resize Image (Original KJ)",
     "CLIPTextEncodeAveraged": "CLIP Text Encode (Averaged)",
+    "CLIPTextEncodeCombined": "CLIP Text Encode (Combined)",
 }
