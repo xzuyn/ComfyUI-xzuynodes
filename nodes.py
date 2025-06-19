@@ -329,9 +329,9 @@ NODE_CLASS_MAPPINGS = {
     "CustomCLIPLoaderXZ": CustomCLIPLoader,
 }
 NODE_DISPLAY_NAME_MAPPINGS = {
-    "LastFrameXZ": "Last Frame Extractor",
+    "LastFrameXZ": "Last Frame (XZ)",
     "ImageResizeKJ": "Resize Image (Original KJ)",
-    "CLIPTextEncodeAveragedXZ": "CLIP Text Encode (Averaged)",
-    "CLIPTextEncodeCombinedXZ": "CLIP Text Encode (Combined)",
-    "CustomCLIPLoaderXZ": "Custom CLIP Loader",
+    "CLIPTextEncodeAveragedXZ": "CLIP Text Encode (Averaged) (XZ)",
+    "CLIPTextEncodeCombinedXZ": "CLIP Text Encode (Combined) (XZ)",
+    "CustomCLIPLoaderXZ": "CLIP Loader (XZ)",
 }
