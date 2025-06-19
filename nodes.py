@@ -322,16 +322,16 @@ class CLIPLoaderXZ:
 
 
 NODE_CLASS_MAPPINGS = {
-    "LastFrameXZ": LastFrameNode,
+    "LastFrameXZ": LastFrameXZ,
     "ImageResizeKJ": ImageResizeKJ,
-    "CLIPTextEncodeAveragedXZ": CLIPTextEncodeAveraged,
-    "CLIPTextEncodeCombinedXZ": CLIPTextEncodeCombined,
-    "CustomCLIPLoaderXZ": CustomCLIPLoader,
+    "CLIPTextEncodeAveragedXZ": CLIPTextEncodeAveragedXZ,
+    "CLIPTextEncodeCombinedXZ": CLIPTextEncodeCombinedXZ,
+    "CLIPLoaderXZ": CLIPLoaderXZ,
 }
 NODE_DISPLAY_NAME_MAPPINGS = {
     "LastFrameXZ": "Last Frame (XZ)",
     "ImageResizeKJ": "Resize Image (Original KJ)",
     "CLIPTextEncodeAveragedXZ": "CLIP Text Encode (Averaged) (XZ)",
     "CLIPTextEncodeCombinedXZ": "CLIP Text Encode (Combined) (XZ)",
-    "CustomCLIPLoaderXZ": "CLIP Loader (XZ)",
+    "CLIPLoaderXZ": "CLIP Loader (XZ)",
 }
