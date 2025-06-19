@@ -4,7 +4,7 @@ A collection of nodes I created to solve various issues or ideas I had.
 
 ## List of Nodes
 
-### Last Frame Extractor
+### Last Frame (XZ)
 
 - Lets you input a video and it will output the last frame. Useful for video models if you want to extend.
 
@@ -12,6 +12,10 @@ A collection of nodes I created to solve various issues or ideas I had.
 
 - [KJNodes' original `ImageResizeKJ` node](https://github.com/kijai/ComfyUI-KJNodes/blob/0addfc6101f7a834c7fb6e0a1b26529360ab5350/nodes/image_nodes.py#L2137), as I prefer its `keep_proportion` method.
 
-### CLIP Text Encode (Averaged)
+### CLIP Text Encode (Averaged) (XZ)
 
-### CLIP Text Encode (Combined)
+### CLIP Text Encode (Combined) (XZ)
+
+### CLIP Loader (XZ)
+
+- Same as CLIPLoader, but I added a `"cuda"` option since `"default"` wasn't loading to GPU with `--lowvram` mode.
