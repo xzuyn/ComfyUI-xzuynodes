@@ -2,12 +2,11 @@ import os
 import folder_paths
 import logging
 import torch
-from tqdm import tqdm
 
 from nodes import MAX_RESOLUTION
 from comfy_api.input_impl import VideoFromFile
 from comfy.comfy_types import IO, ComfyNodeABC
-from comfy.utils import common_upscale
+from comfy.utils import ProgressBar, common_upscale
 
 
 class LastFrameNode(ComfyNodeABC):
@@ -172,12 +171,14 @@ class CLIPTextEncodeAveraged(ComfyNodeABC):
             return (clip.encode_from_tokens_scheduled(clip.tokenize(text)),)
 
         conds = []
-        for seg in tqdm(segs, desc="Encoding prompt segments"):
+        pbar = ProgressBar(len(segs))
+        for seg in segs:
             try:
                 tok = clip.tokenize(seg)
                 conds.append(clip.encode_from_tokens_scheduled(tok))
             except Exception as e:
                 logging.warning(f"CLIP encode failed on segment {seg!r}: {e}")
+        pbar.update(1)
 
         if not conds:
             # if *all* encodings failed, fallback
@@ -267,12 +268,14 @@ class CLIPTextEncodeCombined(ComfyNodeABC):
             return (clip.encode_from_tokens_scheduled(clip.tokenize(text)),)
 
         conds = []
-        for seg in tqdm(segs, desc="Encoding prompt segments"):
+        pbar = ProgressBar(len(segs))
+        for seg in segs:
             try:
                 tok = clip.tokenize(seg)
                 conds.append(clip.encode_from_tokens_scheduled(tok))
             except Exception as e:
                 logging.warning(f"CLIP encode failed on segment {seg!r}: {e}")
+            pbar.update(1)
 
         if not conds:
             # if *all* encodings failed, fallback
