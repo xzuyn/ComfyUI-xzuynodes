@@ -4,12 +4,13 @@ import logging
 import torch
 
 from nodes import MAX_RESOLUTION
+import comfy.sd
 from comfy_api.input_impl import VideoFromFile
 from comfy.comfy_types import IO, ComfyNodeABC
 from comfy.utils import ProgressBar, common_upscale
 
 
-class LastFrameNode(ComfyNodeABC):
+class LastFrameXZ(ComfyNodeABC):
     """Extracts the last frame from a selected video file."""
 
     @classmethod
@@ -125,7 +126,7 @@ highest dimension.
         return(image, image.shape[2], image.shape[1],)
 
 
-class CLIPTextEncodeAveraged(ComfyNodeABC):
+class CLIPTextEncodeAveragedXZ(ComfyNodeABC):
     """Uses code from CLIPTextEncode and ConditioningAverage nodes to split up a prompt and then average the conditioning of all splits."""
 
     @classmethod
@@ -222,7 +223,7 @@ class CLIPTextEncodeAveraged(ComfyNodeABC):
         return (averaged,)
 
 
-class CLIPTextEncodeCombined(ComfyNodeABC):
+class CLIPTextEncodeCombinedXZ(ComfyNodeABC):
     """Uses code from CLIPTextEncode and ConditioningCombine nodes to split up a prompt and then combine the conditioning of all splits."""
 
     @classmethod
@@ -284,15 +285,53 @@ class CLIPTextEncodeCombined(ComfyNodeABC):
             return (sum(conds, []),)
 
 
+class CLIPLoaderXZ:
+    """Same as CLIPLoader, but I added a cuda option since default wasn't loading to GPU with lowvram mode."""
+
+    @classmethod
+    def INPUT_TYPES(s):
+        return {"required": { "clip_name": (folder_paths.get_filename_list("text_encoders"), ),
+                              "type": (["stable_diffusion", "stable_cascade", "sd3", "stable_audio", "mochi", "ltxv", "pixart", "cosmos", "lumina2", "wan", "hidream", "chroma", "ace"], ),
+                              },
+                "optional": {
+                              "device": (["default", "cpu", "cuda"], {"advanced": True}),
+                             }}
+
+    RETURN_TYPES = ("CLIP",)
+    FUNCTION = "load_clip"
+    CATEGORY = "xzuynodes"
+    DESCRIPTION = "[Recipes]\n\nstable_diffusion: clip-l\nstable_cascade: clip-g\nsd3: t5 xxl/ clip-g / clip-l\nstable_audio: t5 base\nmochi: t5 xxl\ncosmos: old t5 xxl\nlumina2: gemma 2 2B\nwan: umt5 xxl\n hidream: llama-3.1 (Recommend) or t5"
+
+    def load_clip(self, clip_name, type="stable_diffusion", device="default"):
+        clip_type = getattr(comfy.sd.CLIPType, type.upper(), comfy.sd.CLIPType.STABLE_DIFFUSION)
+
+        model_options = {}
+        if device == "cpu":
+            model_options["load_device"] = model_options["offload_device"] = torch.device("cpu")
+        elif device == "cuda":
+            model_options["load_device"] = torch.device(device)
+
+        clip_path = folder_paths.get_full_path_or_raise("text_encoders", clip_name)
+        clip = comfy.sd.load_clip(
+            ckpt_paths=[clip_path],
+            embedding_directory=folder_paths.get_folder_paths("embeddings"),
+            clip_type=clip_type,
+            model_options=model_options,
+        )
+        return (clip,)
+
+
 NODE_CLASS_MAPPINGS = {
-    "LastFrameNode": LastFrameNode,
+    "LastFrameXZ": LastFrameNode,
     "ImageResizeKJ": ImageResizeKJ,
-    "CLIPTextEncodeAveraged": CLIPTextEncodeAveraged,
-    "CLIPTextEncodeCombined": CLIPTextEncodeCombined,
+    "CLIPTextEncodeAveragedXZ": CLIPTextEncodeAveraged,
+    "CLIPTextEncodeCombinedXZ": CLIPTextEncodeCombined,
+    "CustomCLIPLoaderXZ": CustomCLIPLoader,
 }
 NODE_DISPLAY_NAME_MAPPINGS = {
-    "LastFrameNode": "Last Frame Extractor",
+    "LastFrameXZ": "Last Frame Extractor",
     "ImageResizeKJ": "Resize Image (Original KJ)",
-    "CLIPTextEncodeAveraged": "CLIP Text Encode (Averaged)",
-    "CLIPTextEncodeCombined": "CLIP Text Encode (Combined)",
+    "CLIPTextEncodeAveragedXZ": "CLIP Text Encode (Averaged)",
+    "CLIPTextEncodeCombinedXZ": "CLIP Text Encode (Combined)",
+    "CustomCLIPLoaderXZ": "Custom CLIP Loader",
 }
