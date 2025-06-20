@@ -209,14 +209,14 @@ class CLIPTextEncodeAveragedXZ(ComfyNodeABC):
 
             # stack & mean
             stacked = torch.stack(padded, dim=0)
-            mean_t = torch.sum(stacked, dim=0)
+            mean_t = torch.mean(stacked, dim=0)
 
             # average pooled_output if present
             valid_p = [p for p in pooled if p is not None]
             meta_out = {}
             if valid_p:
                 p_stack = torch.stack(valid_p, dim=0)
-                meta_out["pooled_output"] = torch.sum(p_stack, dim=0)
+                meta_out["pooled_output"] = torch.mean(p_stack, dim=0)
 
             averaged.append([mean_t, meta_out])
 
