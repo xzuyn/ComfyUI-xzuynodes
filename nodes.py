@@ -71,12 +71,12 @@ class ImageResizeKJ:
                 "keep_proportion": ("BOOLEAN", { "default": True }),
                 "divisible_by": ("INT", { "default": 8, "min": 0, "max": 512, "step": 1, }),
             },
-            "optional" : {
-                "width_input": ("INT", { "forceInput": True}),
-                "height_input": ("INT", { "forceInput": True}),
+            "optional": {
+                "width_input": ("INT", {"forceInput": True}),
+                "height_input": ("INT", {"forceInput": True}),
                 "get_image_size": ("IMAGE",),
                 "crop": (["center", "disabled"],),
-            }
+            },
         }
 
     RETURN_TYPES = ("IMAGE", "INT", "INT",)
@@ -106,7 +106,7 @@ highest dimension.
         width_input=None,
         height_input=None,
         get_image_size=None,
-        crop="center"
+        crop="center",
     ):
         B, H, W, C = image.shape
 
@@ -118,18 +118,18 @@ highest dimension.
             _, height, width, _ = get_image_size.shape
 
         if keep_proportion and get_image_size is None:
-                # If one of the dimensions is zero, calculate it to maintain the aspect ratio
-                if width == 0 and height != 0:
-                    ratio = height / H
-                    width = round(W * ratio)
-                elif height == 0 and width != 0:
-                    ratio = width / W
-                    height = round(H * ratio)
-                elif width != 0 and height != 0:
-                    # Scale based on which dimension is smaller in proportion to the desired dimensions
-                    ratio = min(width / W, height / H)
-                    width = round(W * ratio)
-                    height = round(H * ratio)
+            # If one of the dimensions is zero, calculate it to maintain the aspect ratio
+            if width == 0 and height != 0:
+                ratio = height / H
+                width = round(W * ratio)
+            elif height == 0 and width != 0:
+                ratio = width / W
+                height = round(H * ratio)
+            elif width != 0 and height != 0:
+                # Scale based on which dimension is smaller in proportion to the desired dimensions
+                ratio = min(width / W, height / H)
+                width = round(W * ratio)
+                height = round(H * ratio)
         else:
             if width == 0:
                 width = W
@@ -140,9 +140,9 @@ highest dimension.
             width = width - (width % divisible_by)
             height = height - (height % divisible_by)
 
-        image = image.movedim(-1,1)
+        image = image.movedim(-1, 1)
         image = common_upscale(image, width, height, upscale_method, crop)
-        image = image.movedim(1,-1)
+        image = image.movedim(1, -1)
 
         return (image, image.shape[2], image.shape[1],)
 
@@ -170,7 +170,7 @@ class CLIPTextEncodeXZ(ComfyNodeABC):
                     ["\\n", ",", "."], {"tooltip": "Delimiter on which to split the prompt before encoding."}
                 ),
                 "method": (["average", "combine"],),
-                "use_mask": ("BOOLEAN", { "default": False }),
+                "use_mask": ("BOOLEAN", {"default": False}),
             }
         }
 
@@ -246,14 +246,13 @@ class CLIPTextEncodeXZ(ComfyNodeABC):
                 stacked = torch.stack(padded, dim=0)
                 mask_stack = torch.stack(masks, dim=0)
 
-                masked = stacked * mask_stack.unsqueeze(-1)       # zero out padded positions
-                sum_t = masked.sum(dim=0)                         # sum over segments
-                counts = mask_stack.sum(dim=0).clamp(min=1)       # counts of valid tokens
-                mean_t = sum_t / counts.unsqueeze(-1)             # divide by counts
+                masked = stacked * mask_stack.unsqueeze(-1)  # zero out padded positions
+                sum_t = masked.sum(dim=0)                    # sum over segments
+                counts = mask_stack.sum(dim=0).clamp(min=1)  # counts of valid tokens
+                mean_t = sum_t / counts.unsqueeze(-1)        # divide by counts
             else:
                 stacked = torch.stack(padded, dim=0)
                 mean_t = torch.mean(stacked, dim=0)
-                
 
             # average pooled_output if present
             valid_p = [p for p in pooled if p is not None]
@@ -288,7 +287,7 @@ class CLIPLoaderXZ:
             },
             "optional": {
                 "device": (["default", "cpu", "cuda"], {"advanced": True}),
-            }
+            },
         }
 
     RETURN_TYPES = ("CLIP",)
@@ -349,7 +348,7 @@ class WanImageToVideoXZ:
             "optional": {
                 "clip_vision_output": ("CLIP_VISION_OUTPUT",),
                 "start_image": ("IMAGE",),
-            }
+            },
         }
 
     RETURN_TYPES = ("CONDITIONING", "CONDITIONING", "LATENT")
@@ -367,7 +366,7 @@ class WanImageToVideoXZ:
         length,
         batch_size,
         start_image=None,
-        clip_vision_output=None
+        clip_vision_output=None,
     ):
         print("Attempting to free GPU VRAM and system RAM aggressively...")
         # GPU VRAM
@@ -389,23 +388,46 @@ class WanImageToVideoXZ:
         ram_after = psutil.virtual_memory().percent
         print(f"System RAM: before={ram_before:.1f}%, after={ram_after:.1f}%, freed={ram_before - ram_after:.1f}%")
 
-        latent = torch.zeros([batch_size, 16, ((length - 1) // 4) + 1, height // 8, width // 8], device=comfy.model_management.intermediate_device())
+        latent = torch.zeros(
+            [batch_size, 16, ((length - 1) // 4) + 1, height // 8, width // 8],
+            device=comfy.model_management.intermediate_device(),
+        )
 
         if start_image is not None:
-            start_image = comfy.utils.common_upscale(start_image[:length].movedim(-1, 1), width, height, "bilinear", "center").movedim(1, -1)
-            image = torch.ones((length, height, width, start_image.shape[-1]), device=start_image.device, dtype=start_image.dtype) * 0.5
+            start_image = comfy.utils.common_upscale(
+                start_image[:length].movedim(-1, 1), width, height, "bilinear", "center"
+            ).movedim(1, -1)
+            image = torch.ones(
+                (length, height, width, start_image.shape[-1]),
+                device=start_image.device,
+                dtype=start_image.dtype,
+            ) * 0.5
             image[:start_image.shape[0]] = start_image
 
             concat_latent_image = vae.encode(image[:, :, :, :3])
-            mask = torch.ones((1, 1, latent.shape[2], concat_latent_image.shape[-2], concat_latent_image.shape[-1]), device=start_image.device, dtype=start_image.dtype)
+            mask = torch.ones(
+                (1, 1, latent.shape[2], concat_latent_image.shape[-2], concat_latent_image.shape[-1]),
+                device=start_image.device,
+                dtype=start_image.dtype,
+            )
             mask[:, :, :((start_image.shape[0] - 1) // 4) + 1] = 0.0
 
-            positive = node_helpers.conditioning_set_values(positive, {"concat_latent_image": concat_latent_image, "concat_mask": mask})
-            negative = node_helpers.conditioning_set_values(negative, {"concat_latent_image": concat_latent_image, "concat_mask": mask})
+            positive = node_helpers.conditioning_set_values(
+                positive,
+                {"concat_latent_image": concat_latent_image, "concat_mask": mask},
+            )
+            negative = node_helpers.conditioning_set_values(
+                negative,
+                {"concat_latent_image": concat_latent_image, "concat_mask": mask},
+            )
 
         if clip_vision_output is not None:
-            positive = node_helpers.conditioning_set_values(positive, {"clip_vision_output": clip_vision_output})
-            negative = node_helpers.conditioning_set_values(negative, {"clip_vision_output": clip_vision_output})
+            positive = node_helpers.conditioning_set_values(
+                positive, {"clip_vision_output": clip_vision_output}
+            )
+            negative = node_helpers.conditioning_set_values(
+                negative, {"clip_vision_output": clip_vision_output}
+            )
 
         return (positive, negative, {"samples": latent})
 
@@ -422,5 +444,5 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "ImageResizeKJ": "Resize Image (Original KJ)",
     "CLIPTextEncodeXZ": "CLIP Text Encode (XZ)",
     "CLIPLoaderXZ": "CLIP Loader (XZ)",
-    "WanImageToVideoXZ": "WanImageToVideo (XZ)"
+    "WanImageToVideoXZ": "WanImageToVideo (XZ)",
 }
