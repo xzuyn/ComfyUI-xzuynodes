@@ -207,9 +207,17 @@ class CLIPTextEncodeAveragedXZ(ComfyNodeABC):
                     t = torch.cat([t, pad], dim=1)
                 padded.append(t)
 
-            # stack & mean
+            # create masks
+            masks = [(t.abs().sum(dim=-1) != 0) for t in padded]
+
+            # stack and compute masked mean
             stacked = torch.stack(padded, dim=0)
-            mean_t = torch.mean(stacked, dim=0)
+            mask_stack = torch.stack(masks, dim=0)
+
+            masked = stacked * mask_stack.unsqueeze(-1)       # zero out padded positions
+            sum_t = masked.sum(dim=0)                         # sum over segments
+            counts = mask_stack.sum(dim=0).clamp(min=1)       # counts of valid tokens
+            mean_t = sum_t / counts.unsqueeze(-1)             # divide by counts
 
             # average pooled_output if present
             valid_p = [p for p in pooled if p is not None]
