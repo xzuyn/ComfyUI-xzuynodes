@@ -142,7 +142,7 @@ class CLIPTextEncodeAveragedXZ(ComfyNodeABC):
                 "split_string": (["\\n", ",", "."], {
                     "tooltip": "Delimiter on which to split the prompt before encoding."
                 }),
-                "use_mask": ("BOOLEAN", { "default": True }),
+                "use_mask": ("BOOLEAN", { "default": False }),
             }
         }
 
@@ -221,6 +221,7 @@ class CLIPTextEncodeAveragedXZ(ComfyNodeABC):
                 counts = mask_stack.sum(dim=0).clamp(min=1)       # counts of valid tokens
                 mean_t = sum_t / counts.unsqueeze(-1)             # divide by counts
             else:
+                stacked = torch.stack(padded, dim=0)
                 mean_t = torch.mean(stacked, dim=0)
                 
 
