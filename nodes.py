@@ -126,9 +126,7 @@ highest dimension.
         return(image, image.shape[2], image.shape[1],)
 
 
-class CLIPTextEncodeAveragedXZ(ComfyNodeABC):
-    """Uses code from CLIPTextEncode and ConditioningAverage nodes to split up a prompt and then average the conditioning of all splits."""
-
+class CLIPTextEncodeXZ(ComfyNodeABC):
     @classmethod
     def INPUT_TYPES(s) -> dict:
         return {
@@ -142,20 +140,21 @@ class CLIPTextEncodeAveragedXZ(ComfyNodeABC):
                 "split_string": (["\\n", ",", "."], {
                     "tooltip": "Delimiter on which to split the prompt before encoding."
                 }),
+                "method": (["average", "combine"],),
                 "use_mask": ("BOOLEAN", { "default": False }),
             }
         }
 
     RETURN_TYPES = (IO.CONDITIONING,)
-    OUTPUT_TOOLTIPS = ("An averaged conditioning over all text segments.",)
+    OUTPUT_TOOLTIPS = ("An averaged or combined conditioning over all text segments.",)
     FUNCTION = "encode"
     CATEGORY = "xzuynodes"
     DESCRIPTION = (
         "Splits the prompt on your delimiter, encodes each piece, "
-        "then pads & averages the resulting conditioning layers."
+        "then pads & averages or combines the resulting conditioning layers."
     )
 
-    def encode(self, clip, text, split_string, use_mask):
+    def encode(self, clip, text, split_string, method, use_mask):
         if split_string == "\\n":
             fixed_split_string = "\n"
         else:
@@ -185,6 +184,8 @@ class CLIPTextEncodeAveragedXZ(ComfyNodeABC):
         if not conds:
             # if *all* encodings failed, fallback
             return (clip.encode_from_tokens_scheduled(clip.tokenize(text)),)
+        elif method == "combine":
+            return (sum(conds, []),)
 
         num_layers = len(conds[0])
         averaged = []
@@ -237,68 +238,6 @@ class CLIPTextEncodeAveragedXZ(ComfyNodeABC):
         return (averaged,)
 
 
-class CLIPTextEncodeCombinedXZ(ComfyNodeABC):
-    """Uses code from CLIPTextEncode and ConditioningCombine nodes to split up a prompt and then combine the conditioning of all splits."""
-
-    @classmethod
-    def INPUT_TYPES(s) -> dict:
-        return {
-            "required": {
-                "text": (IO.STRING, {
-                    "multiline": True,
-                    "dynamicPrompts": True,
-                    "tooltip": "The text to be encoded."
-                }),
-                "clip": (IO.CLIP, {"tooltip": "The CLIP model used for encoding the text."}),
-                "split_string": (["\\n", ",", "."], {
-                    "tooltip": "Delimiter on which to split the prompt before encoding."
-                }),
-            }
-        }
-
-    RETURN_TYPES = (IO.CONDITIONING,)
-    OUTPUT_TOOLTIPS = ("A combined conditioning of all text segments.",)
-    FUNCTION = "encode"
-    CATEGORY = "xzuynodes"
-    DESCRIPTION = (
-        "Splits the prompt on your delimiter, encodes each piece, "
-        "then combines all resulting conditioning lists."
-    )
-
-    def encode(self, clip, text, split_string):
-        if split_string == "\\n":
-            fixed_split_string = "\n"
-        else:
-            fixed_split_string = split_string
-        if clip is None:
-            raise RuntimeError(
-                "ERROR: clip input is invalid: None\n\n"
-                "If the clip is from a checkpoint loader node your checkpoint "
-                "does not contain a valid clip or text encoder model."
-            )
-
-        segs = [s.strip() for s in text.split(fixed_split_string) if s.strip()]
-        if not segs:
-            # fallback: full prompt
-            return (clip.encode_from_tokens_scheduled(clip.tokenize(text)),)
-
-        conds = []
-        pbar = ProgressBar(len(segs))
-        for seg in segs:
-            try:
-                tok = clip.tokenize(seg)
-                conds.append(clip.encode_from_tokens_scheduled(tok))
-            except Exception as e:
-                logging.warning(f"CLIP encode failed on segment {seg!r}: {e}")
-            pbar.update(1)
-
-        if not conds:
-            # if *all* encodings failed, fallback
-            return (clip.encode_from_tokens_scheduled(clip.tokenize(text)),)
-        else:
-            return (sum(conds, []),)
-
-
 class CLIPLoaderXZ:
     """Same as CLIPLoader, but I added a cuda option since default wasn't loading to GPU with lowvram mode."""
 
@@ -338,14 +277,12 @@ class CLIPLoaderXZ:
 NODE_CLASS_MAPPINGS = {
     "LastFrameXZ": LastFrameXZ,
     "ImageResizeKJ": ImageResizeKJ,
-    "CLIPTextEncodeAveragedXZ": CLIPTextEncodeAveragedXZ,
-    "CLIPTextEncodeCombinedXZ": CLIPTextEncodeCombinedXZ,
+    "CLIPTextEncodeXZ": CLIPTextEncodeXZ,
     "CLIPLoaderXZ": CLIPLoaderXZ,
 }
 NODE_DISPLAY_NAME_MAPPINGS = {
     "LastFrameXZ": "Last Frame (XZ)",
     "ImageResizeKJ": "Resize Image (Original KJ)",
-    "CLIPTextEncodeAveragedXZ": "CLIP Text Encode (Averaged) (XZ)",
-    "CLIPTextEncodeCombinedXZ": "CLIP Text Encode (Combined) (XZ)",
+    "CLIPTextEncodeXZ": "CLIP Text Encode (XZ)",
     "CLIPLoaderXZ": "CLIP Loader (XZ)",
 }
