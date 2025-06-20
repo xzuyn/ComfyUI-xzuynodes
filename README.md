@@ -12,9 +12,7 @@ A collection of nodes I created to solve various issues or ideas I had.
 
 - [KJNodes' original `ImageResizeKJ` node](https://github.com/kijai/ComfyUI-KJNodes/blob/0addfc6101f7a834c7fb6e0a1b26529360ab5350/nodes/image_nodes.py#L2137), as I prefer its `keep_proportion` method.
 
-### CLIP Text Encode (Averaged) (XZ)
-
-### CLIP Text Encode (Combined) (XZ)
+### CLIP Text Encode (XZ)
 
 ### CLIP Loader (XZ)
 
