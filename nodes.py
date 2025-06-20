@@ -142,6 +142,7 @@ class CLIPTextEncodeAveragedXZ(ComfyNodeABC):
                 "split_string": (["\\n", ",", "."], {
                     "tooltip": "Delimiter on which to split the prompt before encoding."
                 }),
+                "use_mask": ("BOOLEAN", { "default": True }),
             }
         }
 
@@ -154,7 +155,7 @@ class CLIPTextEncodeAveragedXZ(ComfyNodeABC):
         "then pads & averages the resulting conditioning layers."
     )
 
-    def encode(self, clip, text, split_string):
+    def encode(self, clip, text, split_string, use_mask):
         if split_string == "\\n":
             fixed_split_string = "\n"
         else:
@@ -207,17 +208,21 @@ class CLIPTextEncodeAveragedXZ(ComfyNodeABC):
                     t = torch.cat([t, pad], dim=1)
                 padded.append(t)
 
-            # create masks
-            masks = [(t.abs().sum(dim=-1) != 0) for t in padded]
-
             # stack and compute masked mean
-            stacked = torch.stack(padded, dim=0)
-            mask_stack = torch.stack(masks, dim=0)
+            if use_mask:
+                # create masks
+                masks = [(t.abs().sum(dim=-1) != 0) for t in padded]
 
-            masked = stacked * mask_stack.unsqueeze(-1)       # zero out padded positions
-            sum_t = masked.sum(dim=0)                         # sum over segments
-            counts = mask_stack.sum(dim=0).clamp(min=1)       # counts of valid tokens
-            mean_t = sum_t / counts.unsqueeze(-1)             # divide by counts
+                stacked = torch.stack(padded, dim=0)
+                mask_stack = torch.stack(masks, dim=0)
+
+                masked = stacked * mask_stack.unsqueeze(-1)       # zero out padded positions
+                sum_t = masked.sum(dim=0)                         # sum over segments
+                counts = mask_stack.sum(dim=0).clamp(min=1)       # counts of valid tokens
+                mean_t = sum_t / counts.unsqueeze(-1)             # divide by counts
+            else:
+                mean_t = torch.mean(stacked, dim=0)
+                
 
             # average pooled_output if present
             valid_p = [p for p in pooled if p is not None]
