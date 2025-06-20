@@ -2,16 +2,22 @@ import os
 import folder_paths
 import logging
 import torch
+import gc
+import psutil
 
-from nodes import MAX_RESOLUTION
 import comfy.sd
+import node_helpers
+import comfy.model_management as mm
+from nodes import MAX_RESOLUTION
 from comfy_api.input_impl import VideoFromFile
 from comfy.comfy_types import IO, ComfyNodeABC
 from comfy.utils import ProgressBar, common_upscale
 
 
 class LastFrameXZ(ComfyNodeABC):
-    """Extracts the last frame from a selected video file."""
+    """
+    Extracts the last frame from a selected video file.
+    """
 
     @classmethod
     def INPUT_TYPES(cls):
@@ -45,8 +51,8 @@ class LastFrameXZ(ComfyNodeABC):
 
 class ImageResizeKJ:
     """
-    KJNodes original resizing node. I prefer the way this one handles keep_proportion compared to the v2.
-    
+    KJNodes original `ImageResizeKJ`. I prefer the way this one handles `keep_proportion` compared to the v2.
+
     https://github.com/kijai/ComfyUI-KJNodes/blob/0addfc6101f7a834c7fb6e0a1b26529360ab5350/nodes/image_nodes.py#L2137
     """
 
@@ -127,6 +133,18 @@ highest dimension.
 
 
 class CLIPTextEncodeXZ(ComfyNodeABC):
+    """
+    Uses code from `CLIPTextEncode`, `ConditioningCombined`, and `ConditioningAverage` nodes to split up a prompt and then average or combines the conditioning of all splits.
+
+    - `average` will pad all the conditioning to the same length, stack them, and then get the mean of it all.
+    - Enabling `use_mask` will ignore any zeroes during the averaging.
+    - `combine` just adds them all together (`sum(conds, [])`).
+
+    https://github.com/comfyanonymous/ComfyUI/blob/f7fb1937127a8ed011b99424598c9ab1e8565112/nodes.py#L49
+    https://github.com/comfyanonymous/ComfyUI/blob/f7fb1937127a8ed011b99424598c9ab1e8565112/nodes.py#L72
+    https://github.com/comfyanonymous/ComfyUI/blob/f7fb1937127a8ed011b99424598c9ab1e8565112/nodes.py#L84
+    """
+
     @classmethod
     def INPUT_TYPES(s) -> dict:
         return {
@@ -239,7 +257,11 @@ class CLIPTextEncodeXZ(ComfyNodeABC):
 
 
 class CLIPLoaderXZ:
-    """Same as CLIPLoader, but I added a cuda option since default wasn't loading to GPU with lowvram mode."""
+    """
+    Same as `CLIPLoader`, but I added a cuda option since default wasn't loading to GPU with lowvram mode.
+
+    https://github.com/comfyanonymous/ComfyUI/blob/f7fb1937127a8ed011b99424598c9ab1e8565112/nodes.py#L919
+    """
 
     @classmethod
     def INPUT_TYPES(s):
@@ -274,15 +296,86 @@ class CLIPLoaderXZ:
         return (clip,)
 
 
+class WanImageToVideoXZ:
+    """
+    Same as `WanImageToVideo` but it runs the memory clearing code of `FreeMemoryBase` before encoding.
+
+    https://github.com/comfyanonymous/ComfyUI/blob/f7fb1937127a8ed011b99424598c9ab1e8565112/comfy_extras/nodes_wan.py#L10
+    https://github.com/ShmuelRonen/ComfyUI-FreeMemory/blob/44fc13f97feec9fdb50ccf342ad64eeb52a95512/free_memory_node.py#L8
+    """
+
+    @classmethod
+    def INPUT_TYPES(s):
+        return {"required": {"positive": ("CONDITIONING", ),
+                             "negative": ("CONDITIONING", ),
+                             "vae": ("VAE", ),
+                             "width": ("INT", {"default": 832, "min": 16, "max": nodes.MAX_RESOLUTION, "step": 16}),
+                             "height": ("INT", {"default": 480, "min": 16, "max": nodes.MAX_RESOLUTION, "step": 16}),
+                             "length": ("INT", {"default": 81, "min": 1, "max": nodes.MAX_RESOLUTION, "step": 4}),
+                             "batch_size": ("INT", {"default": 1, "min": 1, "max": 4096}),
+                },
+                "optional": {"clip_vision_output": ("CLIP_VISION_OUTPUT", ),
+                             "start_image": ("IMAGE", ),
+                }}
+
+    RETURN_TYPES = ("CONDITIONING", "CONDITIONING", "LATENT")
+    RETURN_NAMES = ("positive", "negative", "latent")
+    FUNCTION = "encode"
+    CATEGORY = "xzuynodes"
+
+    def encode(self, positive, negative, vae, width, height, length, batch_size, start_image=None, clip_vision_output=None):
+        print("Attempting to free GPU VRAM and system RAM aggressively...")
+        # GPU VRAM
+        if torch.cuda.is_available():
+            gpu_before = torch.cuda.memory_allocated()
+            mm.unload_all_models()
+            mm.soft_empty_cache()
+            torch.cuda.empty_cache()
+            gpu_after = torch.cuda.memory_allocated()
+            freed = (gpu_before - gpu_after) / 1e9
+            print(f"GPU VRAM: before={gpu_before/1e9:.2f} GB, after={gpu_after/1e9:.2f} GB, freed={freed:.2f} GB")
+        else:
+            print("CUDA not available—skipping GPU cleanup.")
+
+        # System RAM
+        ram_before = psutil.virtual_memory().percent
+        collected = gc.collect()
+        print(f"Garbage collector collected {collected} objects.")
+        ram_after = psutil.virtual_memory().percent
+        print(f"System RAM: before={ram_before:.1f}%, after={ram_after:.1f}%, freed={ram_before - ram_after:.1f}%")
+
+        latent = torch.zeros([batch_size, 16, ((length - 1) // 4) + 1, height // 8, width // 8], device=comfy.model_management.intermediate_device())
+
+        if start_image is not None:
+            start_image = comfy.utils.common_upscale(start_image[:length].movedim(-1, 1), width, height, "bilinear", "center").movedim(1, -1)
+            image = torch.ones((length, height, width, start_image.shape[-1]), device=start_image.device, dtype=start_image.dtype) * 0.5
+            image[:start_image.shape[0]] = start_image
+
+            concat_latent_image = vae.encode(image[:, :, :, :3])
+            mask = torch.ones((1, 1, latent.shape[2], concat_latent_image.shape[-2], concat_latent_image.shape[-1]), device=start_image.device, dtype=start_image.dtype)
+            mask[:, :, :((start_image.shape[0] - 1) // 4) + 1] = 0.0
+
+            positive = node_helpers.conditioning_set_values(positive, {"concat_latent_image": concat_latent_image, "concat_mask": mask})
+            negative = node_helpers.conditioning_set_values(negative, {"concat_latent_image": concat_latent_image, "concat_mask": mask})
+
+        if clip_vision_output is not None:
+            positive = node_helpers.conditioning_set_values(positive, {"clip_vision_output": clip_vision_output})
+            negative = node_helpers.conditioning_set_values(negative, {"clip_vision_output": clip_vision_output})
+
+        return (positive, negative, {"samples": latent})
+
+
 NODE_CLASS_MAPPINGS = {
     "LastFrameXZ": LastFrameXZ,
     "ImageResizeKJ": ImageResizeKJ,
     "CLIPTextEncodeXZ": CLIPTextEncodeXZ,
     "CLIPLoaderXZ": CLIPLoaderXZ,
+    "WanImageToVideoXZ": WanImageToVideoXZ,
 }
 NODE_DISPLAY_NAME_MAPPINGS = {
     "LastFrameXZ": "Last Frame (XZ)",
     "ImageResizeKJ": "Resize Image (Original KJ)",
     "CLIPTextEncodeXZ": "CLIP Text Encode (XZ)",
     "CLIPLoaderXZ": "CLIP Loader (XZ)",
+    "WanImageToVideoXZ": "WanImageToVideo (XZ)"
 }
