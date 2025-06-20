@@ -5,13 +5,13 @@ import torch
 import gc
 import psutil
 
-import comfy.sd
-import node_helpers
-import comfy.model_management as mm
 from nodes import MAX_RESOLUTION
+import comfy.sd
 from comfy_api.input_impl import VideoFromFile
 from comfy.comfy_types import IO, ComfyNodeABC
 from comfy.utils import ProgressBar, common_upscale
+import comfy.model_management as mm
+import node_helpers
 
 
 class LastFrameXZ(ComfyNodeABC):
@@ -28,7 +28,11 @@ class LastFrameXZ(ComfyNodeABC):
             ],
             ["video"],
         )
-        return {"required": {"file": (sorted(files), {"video_upload": True})}}
+        return {
+            "required": {
+                "file": (sorted(files), {"video_upload": True})
+            }
+        }
 
     RETURN_TYPES = (IO.IMAGE,)
     RETURN_NAMES = ("image",)
@@ -57,7 +61,7 @@ class ImageResizeKJ:
     """
 
     @classmethod
-    def INPUT_TYPES(s):
+    def INPUT_TYPES(cls):
         return {
             "required": {
                 "image": ("IMAGE",),
@@ -91,8 +95,19 @@ Keep proportions keeps the aspect ratio of the image, by
 highest dimension.
 """
 
-    def resize(self, image, width, height, keep_proportion, upscale_method, divisible_by, 
-               width_input=None, height_input=None, get_image_size=None, crop="center"):
+    def resize(
+        self,
+        image,
+        width,
+        height,
+        keep_proportion,
+        upscale_method,
+        divisible_by,
+        width_input=None,
+        height_input=None,
+        get_image_size=None,
+        crop="center"
+    ):
         B, H, W, C = image.shape
 
         if width_input:
@@ -101,7 +116,7 @@ highest dimension.
             height = height_input
         if get_image_size is not None:
             _, height, width, _ = get_image_size.shape
-        
+
         if keep_proportion and get_image_size is None:
                 # If one of the dimensions is zero, calculate it to maintain the aspect ratio
                 if width == 0 and height != 0:
@@ -120,7 +135,7 @@ highest dimension.
                 width = W
             if height == 0:
                 height = H
-      
+
         if divisible_by > 1 and get_image_size is None:
             width = width - (width % divisible_by)
             height = height - (height % divisible_by)
@@ -129,7 +144,7 @@ highest dimension.
         image = common_upscale(image, width, height, upscale_method, crop)
         image = image.movedim(1,-1)
 
-        return(image, image.shape[2], image.shape[1],)
+        return (image, image.shape[2], image.shape[1],)
 
 
 class CLIPTextEncodeXZ(ComfyNodeABC):
@@ -146,18 +161,14 @@ class CLIPTextEncodeXZ(ComfyNodeABC):
     """
 
     @classmethod
-    def INPUT_TYPES(s) -> dict:
+    def INPUT_TYPES(cls) -> dict:
         return {
             "required": {
-                "text": (IO.STRING, {
-                    "multiline": True,
-                    "dynamicPrompts": True,
-                    "tooltip": "The text to be encoded."
-                }),
+                "text": (IO.STRING, {"multiline": True, "dynamicPrompts": True, "tooltip": "The text to be encoded."}),
                 "clip": (IO.CLIP, {"tooltip": "The CLIP model used for encoding the text."}),
-                "split_string": (["\\n", ",", "."], {
-                    "tooltip": "Delimiter on which to split the prompt before encoding."
-                }),
+                "split_string": (
+                    ["\\n", ",", "."], {"tooltip": "Delimiter on which to split the prompt before encoding."}
+                ),
                 "method": (["average", "combine"],),
                 "use_mask": ("BOOLEAN", { "default": False }),
             }
@@ -264,18 +275,37 @@ class CLIPLoaderXZ:
     """
 
     @classmethod
-    def INPUT_TYPES(s):
-        return {"required": { "clip_name": (folder_paths.get_filename_list("text_encoders"), ),
-                              "type": (["stable_diffusion", "stable_cascade", "sd3", "stable_audio", "mochi", "ltxv", "pixart", "cosmos", "lumina2", "wan", "hidream", "chroma", "ace"], ),
-                              },
-                "optional": {
-                              "device": (["default", "cpu", "cuda"], {"advanced": True}),
-                             }}
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "clip_name": (folder_paths.get_filename_list("text_encoders"),),
+                "type": (
+                    [
+                        "stable_diffusion", "stable_cascade", "sd3", "stable_audio", "mochi",
+                        "ltxv", "pixart", "cosmos", "lumina2", "wan", "hidream", "chroma", "ace"
+                    ],
+                ),
+            },
+            "optional": {
+                "device": (["default", "cpu", "cuda"], {"advanced": True}),
+            }
+        }
 
     RETURN_TYPES = ("CLIP",)
     FUNCTION = "load_clip"
     CATEGORY = "xzuynodes"
-    DESCRIPTION = "[Recipes]\n\nstable_diffusion: clip-l\nstable_cascade: clip-g\nsd3: t5 xxl/ clip-g / clip-l\nstable_audio: t5 base\nmochi: t5 xxl\ncosmos: old t5 xxl\nlumina2: gemma 2 2B\nwan: umt5 xxl\n hidream: llama-3.1 (Recommend) or t5"
+    DESCRIPTION = (
+        "[Recipes]\n\n"
+        "stable_diffusion: clip-l\n"
+        "stable_cascade: clip-g\n"
+        "sd3: t5 xxl/ clip-g / clip-l\n"
+        "stable_audio: t5 base\n"
+        "mochi: t5 xxl\n"
+        "cosmos: old t5 xxl\n"
+        "lumina2: gemma 2 2B\n"
+        "wan: umt5 xxl\n"
+        "hidream: llama-3.1 (Recommend) or t5"
+    )
 
     def load_clip(self, clip_name, type="stable_diffusion", device="default"):
         clip_type = getattr(comfy.sd.CLIPType, type.upper(), comfy.sd.CLIPType.STABLE_DIFFUSION)
@@ -305,25 +335,40 @@ class WanImageToVideoXZ:
     """
 
     @classmethod
-    def INPUT_TYPES(s):
-        return {"required": {"positive": ("CONDITIONING", ),
-                             "negative": ("CONDITIONING", ),
-                             "vae": ("VAE", ),
-                             "width": ("INT", {"default": 832, "min": 16, "max": nodes.MAX_RESOLUTION, "step": 16}),
-                             "height": ("INT", {"default": 480, "min": 16, "max": nodes.MAX_RESOLUTION, "step": 16}),
-                             "length": ("INT", {"default": 81, "min": 1, "max": nodes.MAX_RESOLUTION, "step": 4}),
-                             "batch_size": ("INT", {"default": 1, "min": 1, "max": 4096}),
-                },
-                "optional": {"clip_vision_output": ("CLIP_VISION_OUTPUT", ),
-                             "start_image": ("IMAGE", ),
-                }}
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "positive": ("CONDITIONING",),
+                "negative": ("CONDITIONING",),
+                "vae": ("VAE",),
+                "width": ("INT", {"default": 832, "min": 16, "max": nodes.MAX_RESOLUTION, "step": 16}),
+                "height": ("INT", {"default": 480, "min": 16, "max": nodes.MAX_RESOLUTION, "step": 16}),
+                "length": ("INT", {"default": 81, "min": 1, "max": nodes.MAX_RESOLUTION, "step": 4}),
+                "batch_size": ("INT", {"default": 1, "min": 1, "max": 4096}),
+            },
+            "optional": {
+                "clip_vision_output": ("CLIP_VISION_OUTPUT",),
+                "start_image": ("IMAGE",),
+            }
+        }
 
     RETURN_TYPES = ("CONDITIONING", "CONDITIONING", "LATENT")
     RETURN_NAMES = ("positive", "negative", "latent")
     FUNCTION = "encode"
     CATEGORY = "xzuynodes"
 
-    def encode(self, positive, negative, vae, width, height, length, batch_size, start_image=None, clip_vision_output=None):
+    def encode(
+        self,
+        positive,
+        negative,
+        vae,
+        width,
+        height,
+        length,
+        batch_size,
+        start_image=None,
+        clip_vision_output=None
+    ):
         print("Attempting to free GPU VRAM and system RAM aggressively...")
         # GPU VRAM
         if torch.cuda.is_available():
@@ -333,7 +378,7 @@ class WanImageToVideoXZ:
             torch.cuda.empty_cache()
             gpu_after = torch.cuda.memory_allocated()
             freed = (gpu_before - gpu_after) / 1e9
-            print(f"GPU VRAM: before={gpu_before/1e9:.2f} GB, after={gpu_after/1e9:.2f} GB, freed={freed:.2f} GB")
+            print(f"GPU VRAM: before={gpu_before/1e9:.2f} GB, after={gpu_after/1e9:.2f} GB, freed={freed:.2f} GB")
         else:
             print("CUDA not available—skipping GPU cleanup.")
 
