@@ -366,7 +366,7 @@ class CLIPLoaderXZ:
         model_options = {}
         if device == "cpu":
             model_options["load_device"] = model_options["offload_device"] = torch.device("cpu")
-        elif device == "cuda":
+        elif device == "cuda:0":
             model_options["load_device"] = torch.device(device)
 
         clip_path = folder_paths.get_full_path_or_raise("text_encoders", clip_name)
@@ -374,6 +374,42 @@ class CLIPLoaderXZ:
             ckpt_paths=[clip_path],
             embedding_directory=folder_paths.get_folder_paths("embeddings"),
             clip_type=clip_type,
+            model_options=model_options,
+        )
+        return (clip,)
+
+
+class TripleCLIPLoaderXZ:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "clip_name1": (folder_paths.get_filename_list("text_encoders"), ),
+                "clip_name2": (folder_paths.get_filename_list("text_encoders"), ),
+                "clip_name3": (folder_paths.get_filename_list("text_encoders"), )
+            },
+            "optional": {
+                "device": (["default", "cpu", "cuda:0"], {"advanced": True}),
+            },
+        }
+    RETURN_TYPES = ("CLIP",)
+    FUNCTION = "load_clip"
+    CATEGORY = "xzuynodes"
+    DESCRIPTION = "[Recipes]\n\nsd3: clip-l, clip-g, t5"
+
+    def load_clip(self, clip_name1, clip_name2, clip_name3, device="default"):
+        model_options = {}
+        if device == "cpu":
+            model_options["load_device"] = model_options["offload_device"] = torch.device("cpu")
+        elif device == "cuda:0":
+            model_options["load_device"] = torch.device(device)
+
+        clip_path1 = folder_paths.get_full_path_or_raise("text_encoders", clip_name1)
+        clip_path2 = folder_paths.get_full_path_or_raise("text_encoders", clip_name2)
+        clip_path3 = folder_paths.get_full_path_or_raise("text_encoders", clip_name3)
+        clip = comfy.sd.load_clip(
+            ckpt_paths=[clip_path1, clip_path2, clip_path3],
+            embedding_directory=folder_paths.get_folder_paths("embeddings"),
             model_options=model_options,
         )
         return (clip,)
@@ -492,6 +528,7 @@ NODE_CLASS_MAPPINGS = {
     "ImageResizeXZ": ImageResizeXZ,
     "CLIPTextEncodeXZ": CLIPTextEncodeXZ,
     "CLIPLoaderXZ": CLIPLoaderXZ,
+    "TripleCLIPLoaderXZ": TripleCLIPLoaderXZ,
     "WanImageToVideoXZ": WanImageToVideoXZ,
 }
 NODE_DISPLAY_NAME_MAPPINGS = {
@@ -499,6 +536,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "ImageResizeKJ": "Resize Image (Original KJ)",
     "ImageResizeXZ": "Resize Image (XZ)",
     "CLIPTextEncodeXZ": "CLIP Text Encode (XZ)",
-    "CLIPLoaderXZ": "CLIP Loader (XZ)",
+    "CLIPLoaderXZ": "Load CLIP (XZ)",
+    "TripleCLIPLoaderXZ": "TripleCLIPLoader (XZ)",
     "WanImageToVideoXZ": "WanImageToVideo (XZ)",
 }
