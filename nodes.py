@@ -340,7 +340,7 @@ class CLIPLoaderXZ:
                 ),
             },
             "optional": {
-                "device": (["default", "cpu", "cuda"], {"advanced": True}),
+                "device": (["default", "cpu", "cuda:0"], {"advanced": True}),
             },
         }
 
