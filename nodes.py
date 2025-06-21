@@ -66,11 +66,11 @@ class ImageResizeKJ:
         return {
             "required": {
                 "image": ("IMAGE",),
-                "width": ("INT", { "default": 512, "min": 0, "max": MAX_RESOLUTION, "step": 1, }),
-                "height": ("INT", { "default": 512, "min": 0, "max": MAX_RESOLUTION, "step": 1, }),
+                "width": ("INT", {"default": 512, "min": 0, "max": MAX_RESOLUTION, "step": 1,}),
+                "height": ("INT", {"default": 512, "min": 0, "max": MAX_RESOLUTION, "step": 1,}),
                 "upscale_method": (["lanczos", "nearest-exact", "bilinear", "area", "bicubic"],),
-                "keep_proportion": ("BOOLEAN", { "default": True }),
-                "divisible_by": ("INT", { "default": 8, "min": 0, "max": 512, "step": 1, }),
+                "keep_proportion": ("BOOLEAN", { "default": True}),
+                "divisible_by": ("INT", {"default": 8, "min": 0, "max": 512, "step": 1,}),
             },
             "optional": {
                 "width_input": ("INT", {"forceInput": True}),
@@ -154,10 +154,10 @@ class ImageResizeXZ:
         return {
             "required": {
                 "image": ("IMAGE",),
-                "width": ("INT", { "default": 512, "min": 0, "max": MAX_RESOLUTION, "step": 1, }),
-                "height": ("INT", { "default": 512, "min": 0, "max": MAX_RESOLUTION, "step": 1, }),
+                "width": ("INT", {"default": 512, "min": 0, "max": MAX_RESOLUTION, "step": 1,}),
+                "height": ("INT", {"default": 512, "min": 0, "max": MAX_RESOLUTION, "step": 1,}),
                 "upscale_method": (["lanczos", "nearest-exact", "bilinear", "area", "bicubic"],),
-                "divisible_by": ("INT", { "default": 8, "min": 0, "max": 512, "step": 1, }),
+                "divisible_by": ("INT", {"default": 8, "min": 1, "max": 512, "step": 1,}),
                 "crop": (["center", "disabled"],),
             },
         }
@@ -166,7 +166,7 @@ class ImageResizeXZ:
     RETURN_NAMES = ("IMAGE", "width", "height",)
     FUNCTION = "resize"
     CATEGORY = "xzuynodes"
-    DESCRIPTION = ""
+    DESCRIPTION = "Resize image to maintain aspect ratio."
 
     def resize(
         self,
@@ -178,20 +178,27 @@ class ImageResizeXZ:
         crop="center",
     ):
         B, H, W, C = image.shape
+        original_pixels = W * H
+        aspect_ratio = W / H
+        target_pixels = width * height
 
-        # Estimate ideal width = sqrt(pixels * aspect)
-        ideal_width = math.sqrt((width * height) * (W / H))
-        new_width = divisible_by * round(ideal_width / divisible_by)
+        if original_pixels == target_pixels:
+            new_width = divisible_by * round(W / divisible_by)
+            new_height = divisible_by * round(H / divisible_by)
+        else:
+            # Estimate width from aspect and target pixel count
+            ideal_width = math.sqrt(target_pixels * aspect_ratio)
+            new_width = divisible_by * round(ideal_width / divisible_by)
 
-        # Compute height to match pixel count
-        ideal_height = (width * height) / new_width
-        new_height = divisible_by * round(ideal_height / divisible_by)
+            # Match pixel count
+            ideal_height = target_pixels / new_width
+            new_height = divisible_by * round(ideal_height / divisible_by)
 
         image = image.movedim(-1, 1)
         image = common_upscale(image, new_width, new_height, upscale_method, crop)
         image = image.movedim(1, -1)
 
-        return (image, image.shape[2], image.shape[1],)
+        return (image, new_width, new_height,)
 
 
 class CLIPTextEncodeXZ(ComfyNodeABC):
