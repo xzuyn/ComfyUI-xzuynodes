@@ -4,6 +4,7 @@ import logging
 import torch
 import gc
 import psutil
+import math
 
 from nodes import MAX_RESOLUTION
 import comfy.sd
@@ -142,6 +143,52 @@ highest dimension.
 
         image = image.movedim(-1, 1)
         image = common_upscale(image, width, height, upscale_method, crop)
+        image = image.movedim(1, -1)
+
+        return (image, image.shape[2], image.shape[1],)
+
+
+class ImageResizeXZ:
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+                "width": ("INT", { "default": 512, "min": 0, "max": MAX_RESOLUTION, "step": 1, }),
+                "height": ("INT", { "default": 512, "min": 0, "max": MAX_RESOLUTION, "step": 1, }),
+                "upscale_method": (["lanczos", "nearest-exact", "bilinear", "area", "bicubic"],),
+                "divisible_by": ("INT", { "default": 8, "min": 0, "max": 512, "step": 1, }),
+                "crop": (["center", "disabled"],),
+            },
+        }
+
+    RETURN_TYPES = ("IMAGE", "INT", "INT",)
+    RETURN_NAMES = ("IMAGE", "width", "height",)
+    FUNCTION = "resize"
+    CATEGORY = "xzuynodes"
+    DESCRIPTION = ""
+
+    def resize(
+        self,
+        image,
+        width,
+        height,
+        upscale_method,
+        divisible_by,
+        crop="center",
+    ):
+        B, H, W, C = image.shape
+
+        # Estimate ideal width = sqrt(pixels * aspect)
+        ideal_width = math.sqrt((width * height) * (W / H))
+        new_width = divisible_by * round(ideal_width / divisible_by)
+
+        # Compute height to match pixel count
+        ideal_height = (width * height) / new_width
+        new_height = divisible_by * round(ideal_height / divisible_by)
+
+        image = image.movedim(-1, 1)
+        image = common_upscale(image, new_width, new_height, upscale_method, crop)
         image = image.movedim(1, -1)
 
         return (image, image.shape[2], image.shape[1],)
@@ -435,6 +482,7 @@ class WanImageToVideoXZ:
 NODE_CLASS_MAPPINGS = {
     "LastFrameXZ": LastFrameXZ,
     "ImageResizeKJ": ImageResizeKJ,
+    "ImageResizeXZ": ImageResizeXZ,
     "CLIPTextEncodeXZ": CLIPTextEncodeXZ,
     "CLIPLoaderXZ": CLIPLoaderXZ,
     "WanImageToVideoXZ": WanImageToVideoXZ,
@@ -442,6 +490,7 @@ NODE_CLASS_MAPPINGS = {
 NODE_DISPLAY_NAME_MAPPINGS = {
     "LastFrameXZ": "Last Frame (XZ)",
     "ImageResizeKJ": "Resize Image (Original KJ)",
+    "ImageResizeXZ": "Resize Image (XZ)",
     "CLIPTextEncodeXZ": "CLIP Text Encode (XZ)",
     "CLIPLoaderXZ": "CLIP Loader (XZ)",
     "WanImageToVideoXZ": "WanImageToVideo (XZ)",
