@@ -18,6 +18,10 @@ A collection of nodes I created to solve various issues or ideas I had.
 
 ### CLIP Loader (XZ)
 
-- Same as CLIPLoader, but I added a `"cuda"` option since `"default"` wasn't loading to GPU with `--lowvram` mode.
+- Same as `CLIPLoader`, but I added a `"cuda:0"` option since `"default"` wasn't loading to GPU with `--lowvram` mode.
+
+### TripleCLIPLoader (XZ)
+
+- Same changes as `CLIP Loader (XZ)`, but using `TripleCLIPLoader`.
 
 ### WanImageToVideo (XZ)
