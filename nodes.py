@@ -5,6 +5,8 @@ import torch
 import gc
 import psutil
 import math
+from PIL import ImageOps
+import numpy as np
 
 from nodes import MAX_RESOLUTION
 import comfy.sd
@@ -15,9 +17,9 @@ import comfy.model_management as mm
 import node_helpers
 
 
-class LastFrameXZ(ComfyNodeABC):
+class FirstLastFrameXZ(ComfyNodeABC):
     """
-    Extracts the last frame from a selected video file.
+    Extracts the first or last frame from a selected video file.
     """
 
     @classmethod
@@ -31,16 +33,17 @@ class LastFrameXZ(ComfyNodeABC):
         )
         return {
             "required": {
-                "file": (sorted(files), {"video_upload": True})
+                "file": (sorted(files), {"video_upload": True}),
+                "first_or_last": (["first", "last"],),
             }
         }
 
     RETURN_TYPES = (IO.IMAGE,)
     RETURN_NAMES = ("image",)
-    FUNCTION = "extract_last_frame"
+    FUNCTION = "extract_frame"
     CATEGORY = "xzuynodes"
 
-    def extract_last_frame(self, file: str):
+    def extract_frame(self, file, first_or_last):
         path = folder_paths.get_annotated_filepath(file)
         video = VideoFromFile(path)
         frames = video.get_components().images
@@ -51,7 +54,13 @@ class LastFrameXZ(ComfyNodeABC):
             length = 1
         if length == 0:
             raise ValueError(f"Video '{file}' has no frames.")
-        return ([frames[-1]],)
+
+        raw = frames[0] if first_or_last == "first" else frames[-1]
+
+        if raw.dim() == 3:
+            return (raw.unsqueeze(0),)
+        else:
+            return (raw,)
 
 
 class ImageResizeKJ:
@@ -523,7 +532,7 @@ class WanImageToVideoXZ:
 
 
 NODE_CLASS_MAPPINGS = {
-    "LastFrameXZ": LastFrameXZ,
+    "FirstLastFrameXZ": FirstLastFrameXZ,
     "ImageResizeKJ": ImageResizeKJ,
     "ImageResizeXZ": ImageResizeXZ,
     "CLIPTextEncodeXZ": CLIPTextEncodeXZ,
@@ -532,7 +541,7 @@ NODE_CLASS_MAPPINGS = {
     "WanImageToVideoXZ": WanImageToVideoXZ,
 }
 NODE_DISPLAY_NAME_MAPPINGS = {
-    "LastFrameXZ": "Last Frame (XZ)",
+    "FirstLastFrameXZ": "First/Last Frame (XZ)",
     "ImageResizeKJ": "Resize Image (Original KJ)",
     "ImageResizeXZ": "Resize Image (XZ)",
     "CLIPTextEncodeXZ": "CLIP Text Encode (XZ)",
