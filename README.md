@@ -4,9 +4,9 @@ A collection of nodes I created to solve various issues or ideas I had.
 
 ## List of Nodes
 
-### Last Frame (XZ)
+### First/Last Frame (XZ)
 
-- Lets you input a video and it will output the last frame. Useful for video models if you want to extend.
+- Lets you input a video and it will output the first or last frame. Useful for video models if you want to extend.
 
 ### Resize Image (Original KJ)
 
