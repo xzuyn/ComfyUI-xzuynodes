@@ -388,6 +388,53 @@ class CLIPLoaderXZ:
         return (clip,)
 
 
+class DualCLIPLoaderXZ:
+    """
+    Same as `DualCLIPLoader`, but I added a cuda option since default wasn't loading to GPU with lowvram mode.
+
+    https://github.com/comfyanonymous/ComfyUI/blob/bd951a714f8c736680fe13e735eee71acf73dd4c/nodes.py#L946
+    """
+
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "clip_name1": (folder_paths.get_filename_list("text_encoders"),),
+                "clip_name2": (folder_paths.get_filename_list("text_encoders"),),
+                "type": (["sdxl", "sd3", "flux", "hunyuan_video", "hidream"],),
+            },
+            "optional": {
+                "device": (["default", "cpu", "cuda:0"], {"advanced": True}),}
+        }
+    RETURN_TYPES = ("CLIP",)
+    FUNCTION = "load_clip"
+
+    CATEGORY = "advanced/loaders"
+
+    DESCRIPTION = (
+        "[Recipes]\n\n"
+        "sdxl: clip-l, clip-g\n"
+        "sd3: clip-l, clip-g / clip-l, t5 / clip-g, t5\n"
+        "flux: clip-l, t5\n"
+        "hidream: at least one of t5 or llama, recommended t5 and llama"
+    )
+
+    def load_clip(self, clip_name1, clip_name2, type, device="default"):
+        clip_type = getattr(comfy.sd.CLIPType, type.upper(), comfy.sd.CLIPType.STABLE_DIFFUSION)
+
+        clip_path1 = folder_paths.get_full_path_or_raise("text_encoders", clip_name1)
+        clip_path2 = folder_paths.get_full_path_or_raise("text_encoders", clip_name2)
+
+        model_options = {}
+        if device == "cpu":
+            model_options["load_device"] = model_options["offload_device"] = torch.device("cpu")
+        elif device == "cuda:0":
+            model_options["load_device"] = torch.device(device)
+
+        clip = comfy.sd.load_clip(ckpt_paths=[clip_path1, clip_path2], embedding_directory=folder_paths.get_folder_paths("embeddings"), clip_type=clip_type, model_options=model_options)
+        return (clip,)
+
+
 class TripleCLIPLoaderXZ:
     @classmethod
     def INPUT_TYPES(s):
@@ -537,6 +584,7 @@ NODE_CLASS_MAPPINGS = {
     "ImageResizeXZ": ImageResizeXZ,
     "CLIPTextEncodeXZ": CLIPTextEncodeXZ,
     "CLIPLoaderXZ": CLIPLoaderXZ,
+    "DualCLIPLoaderXZ": DualCLIPLoaderXZ,
     "TripleCLIPLoaderXZ": TripleCLIPLoaderXZ,
     "WanImageToVideoXZ": WanImageToVideoXZ,
 }
@@ -546,6 +594,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "ImageResizeXZ": "Resize Image (XZ)",
     "CLIPTextEncodeXZ": "CLIP Text Encode (XZ)",
     "CLIPLoaderXZ": "Load CLIP (XZ)",
+    "DualCLIPLoaderXZ": "DualCLIPLoader (XZ)",
     "TripleCLIPLoaderXZ": "TripleCLIPLoader (XZ)",
     "WanImageToVideoXZ": "WanImageToVideo (XZ)",
 }
