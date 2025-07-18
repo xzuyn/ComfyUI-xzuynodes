@@ -495,6 +495,7 @@ class WanImageToVideoXZ:
                 "overlap": ("INT", {"default": 64, "min": 0, "max": 4096, "step": 32}),
                 "temporal_size": ("INT", {"default": 64, "min": 8, "max": 4096, "step": 4}),
                 "temporal_overlap": ("INT", {"default": 8, "min": 4, "max": 4096, "step": 4}),
+                "free_memory": ("BOOLEAN", { "default": True}),
             },
             "optional": {
                 "clip_vision_output": ("CLIP_VISION_OUTPUT",),
@@ -520,28 +521,30 @@ class WanImageToVideoXZ:
         overlap,
         temporal_size,
         temporal_overlap,
+        free_memory,
         start_image=None,
         clip_vision_output=None,
     ):
-        print("Attempting to free GPU VRAM and system RAM aggressively...")
-        # GPU VRAM
-        if torch.cuda.is_available():
-            gpu_before = torch.cuda.memory_allocated()
-            mm.unload_all_models()
-            mm.soft_empty_cache()
-            torch.cuda.empty_cache()
-            gpu_after = torch.cuda.memory_allocated()
-            freed = (gpu_before - gpu_after) / 1e9
-            print(f"GPU VRAM: before={gpu_before/1e9:.2f} GB, after={gpu_after/1e9:.2f} GB, freed={freed:.2f} GB")
-        else:
-            print("CUDA not available—skipping GPU cleanup.")
-
-        # System RAM
-        ram_before = psutil.virtual_memory().percent
-        collected = gc.collect()
-        print(f"Garbage collector collected {collected} objects.")
-        ram_after = psutil.virtual_memory().percent
-        print(f"System RAM: before={ram_before:.1f}%, after={ram_after:.1f}%, freed={ram_before - ram_after:.1f}%")
+        if free_memory:
+            print("Attempting to free GPU VRAM and system RAM aggressively...")
+            # GPU VRAM
+            if torch.cuda.is_available():
+                gpu_before = torch.cuda.memory_allocated()
+                mm.unload_all_models()
+                mm.soft_empty_cache()
+                torch.cuda.empty_cache()
+                gpu_after = torch.cuda.memory_allocated()
+                freed = (gpu_before - gpu_after) / 1e9
+                print(f"GPU VRAM: before={gpu_before/1e9:.2f} GB, after={gpu_after/1e9:.2f} GB, freed={freed:.2f} GB")
+            else:
+                print("CUDA not available—skipping GPU cleanup.")
+    
+            # System RAM
+            ram_before = psutil.virtual_memory().percent
+            collected = gc.collect()
+            print(f"Garbage collector collected {collected} objects.")
+            ram_after = psutil.virtual_memory().percent
+            print(f"System RAM: before={ram_before:.1f}%, after={ram_after:.1f}%, freed={ram_before - ram_after:.1f}%")
 
         latent = torch.zeros(
             [batch_size, 16, ((length - 1) // 4) + 1, height // 8, width // 8],
