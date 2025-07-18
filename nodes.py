@@ -409,7 +409,7 @@ class DualCLIPLoaderXZ:
     RETURN_TYPES = ("CLIP",)
     FUNCTION = "load_clip"
 
-    CATEGORY = "advanced/loaders"
+    CATEGORY = "xzuynodes"
 
     DESCRIPTION = (
         "[Recipes]\n\n"
@@ -473,10 +473,11 @@ class TripleCLIPLoaderXZ:
 
 class WanImageToVideoXZ:
     """
-    Same as `WanImageToVideo` but it runs the memory clearing code of `FreeMemoryBase` before encoding.
+    Same as `WanImageToVideo` but it runs the memory clearing code of `FreeMemoryBase` before doing *tiled* decoding.
 
     https://github.com/comfyanonymous/ComfyUI/blob/f7fb1937127a8ed011b99424598c9ab1e8565112/comfy_extras/nodes_wan.py#L10
     https://github.com/ShmuelRonen/ComfyUI-FreeMemory/blob/44fc13f97feec9fdb50ccf342ad64eeb52a95512/free_memory_node.py#L8
+    https://github.com/comfyanonymous/ComfyUI/blob/7f492522b6dcb142ff2c4d3438310773d9a80551/nodes.py#L341
     """
 
     @classmethod
@@ -490,6 +491,10 @@ class WanImageToVideoXZ:
                 "height": ("INT", {"default": 480, "min": 16, "max": MAX_RESOLUTION, "step": 16}),
                 "length": ("INT", {"default": 81, "min": 1, "max": MAX_RESOLUTION, "step": 4}),
                 "batch_size": ("INT", {"default": 1, "min": 1, "max": 4096}),
+                "tile_size": ("INT", {"default": 512, "min": 64, "max": 4096, "step": 64}),
+                "overlap": ("INT", {"default": 64, "min": 0, "max": 4096, "step": 32}),
+                "temporal_size": ("INT", {"default": 64, "min": 8, "max": 4096, "step": 4}),
+                "temporal_overlap": ("INT", {"default": 8, "min": 4, "max": 4096, "step": 4}),
             },
             "optional": {
                 "clip_vision_output": ("CLIP_VISION_OUTPUT",),
@@ -511,6 +516,10 @@ class WanImageToVideoXZ:
         height,
         length,
         batch_size,
+        tile_size,
+        overlap,
+        temporal_size,
+        temporal_overlap,
         start_image=None,
         clip_vision_output=None,
     ):
@@ -550,7 +559,14 @@ class WanImageToVideoXZ:
             ) * 0.5
             image[:start_image.shape[0]] = start_image
 
-            concat_latent_image = vae.encode(image[:, :, :, :3])
+            concat_latent_image = vae.encode_tiled(
+                image[:, :, :, :3],
+                tile_x=tile_size,
+                tile_y=tile_size,
+                overlap=overlap,
+                tile_t=temporal_size,
+                overlap_t=temporal_overlap,
+            )
             mask = torch.ones(
                 (1, 1, latent.shape[2], concat_latent_image.shape[-2], concat_latent_image.shape[-1]),
                 device=start_image.device,
