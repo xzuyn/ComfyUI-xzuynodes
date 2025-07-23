@@ -473,7 +473,7 @@ class TripleCLIPLoaderXZ:
 
 class WanImageToVideoXZ:
     """
-    Same as `WanImageToVideo` but it runs the memory clearing code of `FreeMemoryBase` before doing *tiled* decoding.
+    Same as `WanImageToVideo` but does *tiled* encoding. It also runs the memory clearing code of `FreeMemoryBase` before and after encoding.
 
     https://github.com/comfyanonymous/ComfyUI/blob/f7fb1937127a8ed011b99424598c9ab1e8565112/comfy_extras/nodes_wan.py#L10
     https://github.com/ShmuelRonen/ComfyUI-FreeMemory/blob/44fc13f97feec9fdb50ccf342ad64eeb52a95512/free_memory_node.py#L8
@@ -495,7 +495,7 @@ class WanImageToVideoXZ:
                 "overlap": ("INT", {"default": 64, "min": 0, "max": 4096, "step": 32}),
                 "temporal_size": ("INT", {"default": 64, "min": 8, "max": 4096, "step": 4}),
                 "temporal_overlap": ("INT", {"default": 8, "min": 4, "max": 4096, "step": 4}),
-                "free_memory": ("BOOLEAN", { "default": True}),
+                "free_memory": ("BOOLEAN", {"default": True}),
             },
             "optional": {
                 "clip_vision_output": ("CLIP_VISION_OUTPUT",),
@@ -507,6 +507,28 @@ class WanImageToVideoXZ:
     RETURN_NAMES = ("positive", "negative", "latent")
     FUNCTION = "encode"
     CATEGORY = "xzuynodes"
+
+    def _clear_memory(self):
+        print("Attempting to free GPU VRAM and system RAM aggressively...")
+
+        # GPU VRAM cleanup
+        if torch.cuda.is_available():
+            before = torch.cuda.memory_allocated()
+            mm.unload_all_models()
+            mm.soft_empty_cache()
+            torch.cuda.empty_cache()
+            after = torch.cuda.memory_allocated()
+            freed = (before - after) / 1e9
+            print(f"GPU VRAM: before={before/1e9:.2f} GB, after={after/1e9:.2f} GB, freed={freed:.2f} GB")
+            del before, after, freed
+
+        # System RAM cleanup
+        ram_before = psutil.virtual_memory().percent
+        collected = gc.collect()
+        print(f"Garbage collector collected {collected} objects.")
+        ram_after = psutil.virtual_memory().percent
+        print(f"System RAM: before={ram_before:.1f}%, after={ram_after:.1f}%, freed={ram_before - ram_after:.1f}%")
+        del ram_before, ram_after, collected
 
     def encode(
         self,
@@ -526,25 +548,7 @@ class WanImageToVideoXZ:
         clip_vision_output=None,
     ):
         if free_memory:
-            print("Attempting to free GPU VRAM and system RAM aggressively...")
-            # GPU VRAM
-            if torch.cuda.is_available():
-                gpu_before = torch.cuda.memory_allocated()
-                mm.unload_all_models()
-                mm.soft_empty_cache()
-                torch.cuda.empty_cache()
-                gpu_after = torch.cuda.memory_allocated()
-                freed = (gpu_before - gpu_after) / 1e9
-                print(f"GPU VRAM: before={gpu_before/1e9:.2f} GB, after={gpu_after/1e9:.2f} GB, freed={freed:.2f} GB")
-            else:
-                print("CUDA not available—skipping GPU cleanup.")
-    
-            # System RAM
-            ram_before = psutil.virtual_memory().percent
-            collected = gc.collect()
-            print(f"Garbage collector collected {collected} objects.")
-            ram_after = psutil.virtual_memory().percent
-            print(f"System RAM: before={ram_before:.1f}%, after={ram_after:.1f}%, freed={ram_before - ram_after:.1f}%")
+            self._clear_memory()
 
         latent = torch.zeros(
             [batch_size, 16, ((length - 1) // 4) + 1, height // 8, width // 8],
@@ -553,7 +557,11 @@ class WanImageToVideoXZ:
 
         if start_image is not None:
             start_image = comfy.utils.common_upscale(
-                start_image[:length].movedim(-1, 1), width, height, "bilinear", "center"
+                start_image[:length].movedim(-1, 1),
+                width,
+                height,
+                "bilinear",
+                "center",
             ).movedim(1, -1)
             image = torch.ones(
                 (length, height, width, start_image.shape[-1]),
@@ -570,12 +578,17 @@ class WanImageToVideoXZ:
                 tile_t=temporal_size,
                 overlap_t=temporal_overlap,
             )
+
+            del image
+
             mask = torch.ones(
                 (1, 1, latent.shape[2], concat_latent_image.shape[-2], concat_latent_image.shape[-1]),
                 device=start_image.device,
                 dtype=start_image.dtype,
             )
             mask[:, :, :((start_image.shape[0] - 1) // 4) + 1] = 0.0
+
+            del start_image
 
             positive = node_helpers.conditioning_set_values(
                 positive,
@@ -586,6 +599,8 @@ class WanImageToVideoXZ:
                 {"concat_latent_image": concat_latent_image, "concat_mask": mask},
             )
 
+            del concat_latent_image, mask
+
         if clip_vision_output is not None:
             positive = node_helpers.conditioning_set_values(
                 positive, {"clip_vision_output": clip_vision_output}
@@ -594,7 +609,12 @@ class WanImageToVideoXZ:
                 negative, {"clip_vision_output": clip_vision_output}
             )
 
-        return (positive, negative, {"samples": latent})
+            del clip_vision_output
+
+        if free_memory:
+            self._clear_memory()
+
+        return positive, negative, {"samples": latent}
 
 
 NODE_CLASS_MAPPINGS = {
