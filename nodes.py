@@ -247,7 +247,7 @@ class ImageResizeQwenImageEditXZ:
     ):
         B, H, W, C = image.shape
 
-        best_w, best_h = min(
+        new_width, new_height = min(
             self.RESOLUTIONS,
             key=lambda wh: abs((wh[0] / wh[1]) - (W / H)),
         )
