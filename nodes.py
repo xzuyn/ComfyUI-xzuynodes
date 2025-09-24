@@ -210,6 +210,55 @@ class ImageResizeXZ:
         return (image, new_width, new_height,)
 
 
+class ImageResizeQwenImageEditXZ:
+    RESOLUTIONS = [  # https://github.com/kohya-ss/musubi-tuner/pull/473#issuecomment-3219314488
+        (720, 1280),
+        (800, 1200),
+        (864, 1168),
+        (896, 1120),
+        (1024, 1024),
+        (1120, 896),
+        (1168, 864),
+        (1200, 800),
+        (1280, 720),
+    ]
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+                "upscale_method": (["lanczos", "nearest-exact", "bilinear", "area", "bicubic"],),
+                "crop": (["center", "disabled"],),
+            },
+        }
+
+    RETURN_TYPES = ("IMAGE", "INT", "INT",)
+    RETURN_NAMES = ("IMAGE", "width", "height",)
+    FUNCTION = "resize"
+    CATEGORY = "xzuynodes"
+    DESCRIPTION = "Resize image to closest Qwen-Image-Edit friendly resolution."
+
+    def resize(
+        self,
+        image,
+        upscale_method,
+        crop="center",
+    ):
+        B, H, W, C = image.shape
+
+        best_w, best_h = min(
+            self.RESOLUTIONS,
+            key=lambda wh: abs((wh[0] / wh[1]) - (W / H)),
+        )
+
+        image = image.movedim(-1, 1)
+        image = common_upscale(image, new_width, new_height, upscale_method, crop)
+        image = image.movedim(1, -1)
+
+        return (image, new_width, new_height,)
+
+
 class CLIPTextEncodeXZ(ComfyNodeABC):
     """
     Uses code from `CLIPTextEncode`, `ConditioningCombined`, and `ConditioningAverage` nodes to split up a prompt and then average or combines the conditioning of all splits.
@@ -621,6 +670,7 @@ NODE_CLASS_MAPPINGS = {
     "FirstLastFrameXZ": FirstLastFrameXZ,
     "ImageResizeKJ": ImageResizeKJ,
     "ImageResizeXZ": ImageResizeXZ,
+    "ImageResizeQwenImageEditXZ": ImageResizeQwenImageEditXZ,
     "CLIPTextEncodeXZ": CLIPTextEncodeXZ,
     "CLIPLoaderXZ": CLIPLoaderXZ,
     "DualCLIPLoaderXZ": DualCLIPLoaderXZ,
@@ -631,6 +681,7 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "FirstLastFrameXZ": "First/Last Frame (XZ)",
     "ImageResizeKJ": "Resize Image (Original KJ)",
     "ImageResizeXZ": "Resize Image (XZ)",
+    "ImageResizeQwenImageEditXZ": "Resize Image (Qwen-Image-Edit) (XZ)",
     "CLIPTextEncodeXZ": "CLIP Text Encode (XZ)",
     "CLIPLoaderXZ": "Load CLIP (XZ)",
     "DualCLIPLoaderXZ": "DualCLIPLoader (XZ)",
