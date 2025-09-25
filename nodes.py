@@ -163,8 +163,8 @@ class ImageResizeXZ:
         return {
             "required": {
                 "image": ("IMAGE",),
-                "width": ("INT", {"default": 512, "min": 0, "max": MAX_RESOLUTION, "step": 1,}),
-                "height": ("INT", {"default": 512, "min": 0, "max": MAX_RESOLUTION, "step": 1,}),
+                "width": ("INT", {"default": 512, "min": 1, "max": MAX_RESOLUTION, "step": 1,}),
+                "height": ("INT", {"default": 512, "min": 1, "max": MAX_RESOLUTION, "step": 1,}),
                 "upscale_method": (["lanczos", "nearest-exact", "bilinear", "area", "bicubic"],),
                 "divisible_by": ("INT", {"default": 8, "min": 1, "max": 512, "step": 1,}),
                 "crop": (["center", "disabled"],),
@@ -202,55 +202,6 @@ class ImageResizeXZ:
             # Match pixel count
             ideal_height = target_pixels / new_width
             new_height = divisible_by * round(ideal_height / divisible_by)
-
-        image = image.movedim(-1, 1)
-        image = common_upscale(image, new_width, new_height, upscale_method, crop)
-        image = image.movedim(1, -1)
-
-        return (image, new_width, new_height,)
-
-
-class ImageResizeQwenImageEditXZ:
-    RESOLUTIONS = [  # https://github.com/kohya-ss/musubi-tuner/pull/473#issuecomment-3219314488
-        (720, 1280),
-        (800, 1200),
-        (864, 1168),
-        (896, 1120),
-        (1024, 1024),
-        (1120, 896),
-        (1168, 864),
-        (1200, 800),
-        (1280, 720),
-    ]
-
-    @classmethod
-    def INPUT_TYPES(cls):
-        return {
-            "required": {
-                "image": ("IMAGE",),
-                "upscale_method": (["lanczos", "nearest-exact", "bilinear", "area", "bicubic"],),
-                "crop": (["center", "disabled"],),
-            },
-        }
-
-    RETURN_TYPES = ("IMAGE", "INT", "INT",)
-    RETURN_NAMES = ("IMAGE", "width", "height",)
-    FUNCTION = "resize"
-    CATEGORY = "xzuynodes"
-    DESCRIPTION = "Resize image to closest Qwen-Image-Edit friendly resolution."
-
-    def resize(
-        self,
-        image,
-        upscale_method,
-        crop="center",
-    ):
-        B, H, W, C = image.shape
-
-        new_width, new_height = min(
-            self.RESOLUTIONS,
-            key=lambda wh: abs((wh[0] / wh[1]) - (W / H)),
-        )
 
         image = image.movedim(-1, 1)
         image = common_upscale(image, new_width, new_height, upscale_method, crop)
@@ -666,25 +617,103 @@ class WanImageToVideoXZ:
         return positive, negative, {"samples": latent}
 
 
+class TextEncodeQwenImageEditXZ:
+    """
+    Same as `TextEncodeQwenImageEdit`, but returns the resolution the image was resized to, so that it can be sent to EmptySD3LatentImage.
+    This also lets you choose the scaling method, and if it will crop or stretch.
+
+    Uses least common multiple between VAE (8) & Qwen-VL (14), which is 56, by default.
+
+    https://github.com/comfyanonymous/ComfyUI/blob/341b4adefd308cbcf82c07effc255f2770b3b3e2/comfy_extras/nodes_qwen.py#L6
+    https://www.reddit.com/r/StableDiffusion/comments/1myr9al/use_a_multiple_of_112_to_get_rid_of_the_zoom/naec6q7/
+    """
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "clip": ("CLIP",),
+                "prompt": ("STRING", {"multiline": True, "dynamicPrompts": True}),
+            },
+            "optional": {
+                "vae": ("VAE",),
+                "image": ("IMAGE",),
+                "resizing_method": (["lanczos", "nearest-exact", "bilinear", "area", "bicubic"],),
+                "crop": (["center", "disabled"],),
+            }
+        }
+
+    RETURN_TYPES = ("CONDITIONING", "INT", "INT",)
+    RETURN_NAMES = ("CONDITIONING", "width", "height",)
+    FUNCTION = "encode"
+    CATEGORY = "xzuynodes"
+
+    def encode(self, clip, prompt, vae, image, resizing_method, crop):
+        ref_latent = None
+        if image is None:
+            images = []
+
+            tokens = clip.tokenize(prompt, images=images)
+            conditioning = clip.encode_from_tokens_scheduled(tokens)
+
+            if ref_latent is not None:
+                conditioning = node_helpers.conditioning_set_values(
+                    conditioning,
+                    {"reference_latents": [ref_latent]},
+                    append=True,
+                )
+
+            return (conditioning, None, None,)
+        else:
+            # Get target resolution using ImageResizeXZ method, hard-coded to 1024*1024 total divisible by 56
+            B, H, W, C = image.shape
+            aspect_ratio = W / H
+            target_pixels = int(1024 * 1024)
+            ideal_width = math.sqrt(target_pixels * aspect_ratio)
+            new_width = 56 * round(ideal_width / 56)
+            ideal_height = target_pixels / new_width
+            new_height = 56 * round(ideal_height / 56)
+
+            image = image.movedim(-1, 1)
+            image = comfy.utils.common_upscale(image, new_width, new_height, resizing_method, crop)
+            image = image.movedim(1, -1)
+
+            images = [image[:, :, :, :3]]
+
+            if vae is not None:
+                ref_latent = vae.encode(images[0])
+
+            tokens = clip.tokenize(prompt, images=images)
+            conditioning = clip.encode_from_tokens_scheduled(tokens)
+
+            if ref_latent is not None:
+                conditioning = node_helpers.conditioning_set_values(
+                    conditioning,
+                    {"reference_latents": [ref_latent]},
+                    append=True,
+                )
+
+            return (conditioning, new_width, new_height,)
+
+
 NODE_CLASS_MAPPINGS = {
     "FirstLastFrameXZ": FirstLastFrameXZ,
     "ImageResizeKJ": ImageResizeKJ,
     "ImageResizeXZ": ImageResizeXZ,
-    "ImageResizeQwenImageEditXZ": ImageResizeQwenImageEditXZ,
     "CLIPTextEncodeXZ": CLIPTextEncodeXZ,
     "CLIPLoaderXZ": CLIPLoaderXZ,
     "DualCLIPLoaderXZ": DualCLIPLoaderXZ,
     "TripleCLIPLoaderXZ": TripleCLIPLoaderXZ,
     "WanImageToVideoXZ": WanImageToVideoXZ,
+    "TextEncodeQwenImageEditXZ": TextEncodeQwenImageEditXZ,
 }
 NODE_DISPLAY_NAME_MAPPINGS = {
     "FirstLastFrameXZ": "First/Last Frame (XZ)",
     "ImageResizeKJ": "Resize Image (Original KJ)",
     "ImageResizeXZ": "Resize Image (XZ)",
-    "ImageResizeQwenImageEditXZ": "Resize Image (Qwen-Image-Edit) (XZ)",
     "CLIPTextEncodeXZ": "CLIP Text Encode (XZ)",
     "CLIPLoaderXZ": "Load CLIP (XZ)",
     "DualCLIPLoaderXZ": "DualCLIPLoader (XZ)",
     "TripleCLIPLoaderXZ": "TripleCLIPLoader (XZ)",
     "WanImageToVideoXZ": "WanImageToVideo (XZ)",
+    "TextEncodeQwenImageEditXZ": "TextEncodeQwenImageEdit (XZ)",
 }
