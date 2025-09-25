@@ -166,7 +166,7 @@ class ImageResizeXZ:
                 "width": ("INT", {"default": 512, "min": 1, "max": MAX_RESOLUTION, "step": 1,}),
                 "height": ("INT", {"default": 512, "min": 1, "max": MAX_RESOLUTION, "step": 1,}),
                 "upscale_method": (["lanczos", "nearest-exact", "bilinear", "area", "bicubic"],),
-                "divisible_by": ("INT", {"default": 8, "min": 1, "max": 512, "step": 1,}),
+                "divisor": ("INT", {"default": 8, "min": 1, "max": 512, "step": 1,}),
                 "crop": (["center", "disabled"],),
             },
         }
@@ -183,8 +183,8 @@ class ImageResizeXZ:
         width,
         height,
         upscale_method,
-        divisible_by,
-        crop="center",
+        divisor,
+        crop,
     ):
         B, H, W, C = image.shape
         original_pixels = W * H
@@ -192,16 +192,16 @@ class ImageResizeXZ:
         target_pixels = width * height
 
         if original_pixels == target_pixels:
-            new_width = divisible_by * round(W / divisible_by)
-            new_height = divisible_by * round(H / divisible_by)
+            new_width = divisor * round(W / divisor)
+            new_height = divisor * round(H / divisor)
         else:
             # Estimate width from aspect and target pixel count
             ideal_width = math.sqrt(target_pixels * aspect_ratio)
-            new_width = divisible_by * round(ideal_width / divisible_by)
+            new_width = divisor * round(ideal_width / divisor)
 
             # Match pixel count
             ideal_height = target_pixels / new_width
-            new_height = divisible_by * round(ideal_height / divisible_by)
+            new_height = divisor * round(ideal_height / divisor)
 
         image = image.movedim(-1, 1)
         image = common_upscale(image, new_width, new_height, upscale_method, crop)
@@ -620,12 +620,10 @@ class WanImageToVideoXZ:
 class TextEncodeQwenImageEditXZ:
     """
     Same as `TextEncodeQwenImageEdit`, but returns the resolution the image was resized to, so that it can be sent to EmptySD3LatentImage.
-    This also lets you choose the scaling method, and if it will crop or stretch.
 
-    Uses least common multiple between VAE (8) & Qwen-VL (14), which is 56, by default.
+    Uses ImageResizeXZ method, hard-coded to 1024*1024. Allows for specifying divisor, resizing method, and if cropping should be used.
 
     https://github.com/comfyanonymous/ComfyUI/blob/341b4adefd308cbcf82c07effc255f2770b3b3e2/comfy_extras/nodes_qwen.py#L6
-    https://www.reddit.com/r/StableDiffusion/comments/1myr9al/use_a_multiple_of_112_to_get_rid_of_the_zoom/naec6q7/
     """
     @classmethod
     def INPUT_TYPES(s):
@@ -638,6 +636,7 @@ class TextEncodeQwenImageEditXZ:
                 "vae": ("VAE",),
                 "image": ("IMAGE",),
                 "resizing_method": (["lanczos", "nearest-exact", "bilinear", "area", "bicubic"],),
+                "divisor": ("INT", {"default": 32, "min": 16, "max": 512, "step": 1,}),
                 "crop": (["center", "disabled"],),
             }
         }
@@ -647,7 +646,7 @@ class TextEncodeQwenImageEditXZ:
     FUNCTION = "encode"
     CATEGORY = "xzuynodes"
 
-    def encode(self, clip, prompt, vae, image, resizing_method, crop):
+    def encode(self, clip, prompt, vae, image, resizing_method, divisor, crop):
         ref_latent = None
         if image is None:
             images = []
@@ -664,14 +663,13 @@ class TextEncodeQwenImageEditXZ:
 
             return (conditioning, None, None,)
         else:
-            # Get target resolution using ImageResizeXZ method, hard-coded to 1024*1024 total divisible by 56
             B, H, W, C = image.shape
             aspect_ratio = W / H
             target_pixels = int(1024 * 1024)
             ideal_width = math.sqrt(target_pixels * aspect_ratio)
-            new_width = 56 * round(ideal_width / 56)
+            new_width = divisor * round(ideal_width / divisor)
             ideal_height = target_pixels / new_width
-            new_height = 56 * round(ideal_height / 56)
+            new_height = divisor * round(ideal_height / divisor)
 
             image = image.movedim(-1, 1)
             image = comfy.utils.common_upscale(image, new_width, new_height, resizing_method, crop)
