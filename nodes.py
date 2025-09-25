@@ -621,7 +621,9 @@ class TextEncodeQwenImageEditXZ:
     """
     Same as `TextEncodeQwenImageEdit`, but returns the resolution the image was resized to, so that it can be sent to EmptySD3LatentImage.
 
-    Uses ImageResizeXZ method, hard-coded to 1024*1024. Allows for specifying divisor, resizing method, and if cropping should be used.
+    Uses ImageResizeXZ method. Allows for specifying divisor, resizing method, and if cropping should be used.
+    
+    You can also scale the hardcoded 1024*1024 pixel count target, with the option to scale only the width and height returns.
 
     https://github.com/comfyanonymous/ComfyUI/blob/341b4adefd308cbcf82c07effc255f2770b3b3e2/comfy_extras/nodes_qwen.py#L6
     """
@@ -629,13 +631,15 @@ class TextEncodeQwenImageEditXZ:
     def INPUT_TYPES(s):
         return {
             "required": {
+                "image": ("IMAGE",),
                 "clip": ("CLIP",),
+                "vae": ("VAE",),
                 "prompt": ("STRING", {"multiline": True, "dynamicPrompts": True}),
             },
             "optional": {
-                "vae": ("VAE",),
-                "image": ("IMAGE",),
-                "resizing_method": (["lanczos", "nearest-exact", "bilinear", "area", "bicubic"],),
+                "resolution_scale": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 1000.0, "step":0.01, "round": False}),
+                "resolutions_to_scale": (["return_only", "image_only", "both", "neither"],),
+                "resizing_method": (["lanczos", "nearest-exact", "bilinear", "area", "bicubic", "bislerp",],),
                 "divisor": ("INT", {"default": 16, "min": 16, "max": 512, "step": 1,}),
                 "crop": (["center", "disabled"],),
             }
@@ -646,51 +650,51 @@ class TextEncodeQwenImageEditXZ:
     FUNCTION = "encode"
     CATEGORY = "xzuynodes"
 
-    def encode(self, clip, prompt, vae, image, resizing_method, divisor, crop):
-        ref_latent = None
-        if image is None:
-            images = []
+    def encode(self, image, clip, vae, prompt, resolution_scale, resolutions_to_scale, resizing_method, divisor, crop):
+        B, H, W, C = image.shape
+        aspect_ratio = W / H
+        target_pixels = int(1024 * 1024)
 
-            tokens = clip.tokenize(prompt, images=images)
-            conditioning = clip.encode_from_tokens_scheduled(tokens)
+        ideal_width = math.sqrt(target_pixels * aspect_ratio)
+        new_width = divisor * round(ideal_width / divisor)
 
-            if ref_latent is not None:
-                conditioning = node_helpers.conditioning_set_values(
-                    conditioning,
-                    {"reference_latents": [ref_latent]},
-                    append=True,
-                )
+        ideal_height = target_pixels / new_width
+        new_height = divisor * round(ideal_height / divisor)
 
-            return (conditioning, None, None,)
-        else:
-            B, H, W, C = image.shape
-            aspect_ratio = W / H
-            target_pixels = int(1024 * 1024)
-            ideal_width = math.sqrt(target_pixels * aspect_ratio)
-            new_width = divisor * round(ideal_width / divisor)
-            ideal_height = target_pixels / new_width
-            new_height = divisor * round(ideal_height / divisor)
+        new_width_scaled = divisor * round((ideal_width * resolution_scale) / divisor)
+        new_height_scaled = divisor * round((ideal_height * resolution_scale) / divisor)
 
-            image = image.movedim(-1, 1)
-            image = comfy.utils.common_upscale(image, new_width, new_height, resizing_method, crop)
-            image = image.movedim(1, -1)
+        if resolutions_to_scale == "output_only" or resolutions_to_scale == "neither":
+            image = comfy.utils.common_upscale(
+                image.movedim(-1, 1),
+                new_width,
+                new_height,
+                resizing_method,
+                crop,
+            ).movedim(1, -1)[:, :, :, :3]
+        else:  # image_only or both
+            image = comfy.utils.common_upscale(
+                image.movedim(-1, 1),
+                new_width_scaled,
+                new_height_scaled,
+                resizing_method,
+                crop,
+            ).movedim(1, -1)[:, :, :, :3]
 
-            images = [image[:, :, :, :3]]
+        ref_latent = vae.encode(image)
+        tokens = clip.tokenize(prompt, images=[image])
+        conditioning = clip.encode_from_tokens_scheduled(tokens)
 
-            if vae is not None:
-                ref_latent = vae.encode(images[0])
+        conditioning = node_helpers.conditioning_set_values(
+            conditioning,
+            {"reference_latents": [ref_latent]},
+            append=True,
+        )
 
-            tokens = clip.tokenize(prompt, images=images)
-            conditioning = clip.encode_from_tokens_scheduled(tokens)
-
-            if ref_latent is not None:
-                conditioning = node_helpers.conditioning_set_values(
-                    conditioning,
-                    {"reference_latents": [ref_latent]},
-                    append=True,
-                )
-
+        if resolutions_to_scale == "image_only" or resolutions_to_scale == "neither":
             return (conditioning, new_width, new_height,)
+        else:  # output_only or both
+            return (conditioning, new_width_scaled, new_height_scaled,)
 
 
 NODE_CLASS_MAPPINGS = {
