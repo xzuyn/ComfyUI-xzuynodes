@@ -636,7 +636,7 @@ class TextEncodeQwenImageEditXZ:
                 "vae": ("VAE",),
                 "image": ("IMAGE",),
                 "resizing_method": (["lanczos", "nearest-exact", "bilinear", "area", "bicubic"],),
-                "divisor": ("INT", {"default": 32, "min": 16, "max": 512, "step": 1,}),
+                "divisor": ("INT", {"default": 16, "min": 16, "max": 512, "step": 1,}),
                 "crop": (["center", "disabled"],),
             }
         }
