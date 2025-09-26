@@ -700,11 +700,12 @@ class TextEncodeQwenImageEditXZ:
 
 class TextEncodeQwenImageEditSimpleXZ:
     """
-    Same as `TextEncodeQwenImageEdit`, but allows you to specify the resolution that is used. Also will return the reference latent.
-
-    Allows for specifying resizing method and if cropping should be used.
+    Same as `TextEncodeQwenImageEdit`, but allows you to specify the resolution used as well as resizing method and if cropping should be used.
+    
+    It will return the reference latent, and a zeroed out conditioning.
 
     https://github.com/comfyanonymous/ComfyUI/blob/341b4adefd308cbcf82c07effc255f2770b3b3e2/comfy_extras/nodes_qwen.py#L6
+    https://github.com/comfyanonymous/ComfyUI/blob/ce4cb2389c8ce63cf8735f200b8672a2c1be0950/nodes.py#L238
     """
 
     @classmethod
@@ -724,8 +725,8 @@ class TextEncodeQwenImageEditSimpleXZ:
             }
         }
 
-    RETURN_TYPES = ("CONDITIONING", "LATENT",)
-    RETURN_NAMES = ("CONDITIONING", "LATENT",)
+    RETURN_TYPES = ("IMAGE", "CONDITIONING", "CONDITIONING", "LATENT",)
+    RETURN_NAMES = ("IMAGE", "CONDITIONING", "ZEROED_CONDITIONING", "LATENT",)
     FUNCTION = "encode"
     CATEGORY = "xzuynodes"
 
@@ -748,7 +749,17 @@ class TextEncodeQwenImageEditSimpleXZ:
             append=True,
         )
 
-        return (conditioning, {"samples": ref_latent},)
+        zeroed_conditioning = []
+        for t in conditioning:
+            d = t[1].copy()
+            pooled_output = d.get("pooled_output", None)
+            if pooled_output is not None:
+                print("Had pooled_output. Keep it.")
+                d["pooled_output"] = torch.zeros_like(pooled_output)
+            n = [torch.zeros_like(t[0]), d]
+            zeroed_conditioning.append(n)
+
+        return (image, conditioning, zeroed_conditioning, {"samples": ref_latent},)
 
 
 NODE_CLASS_MAPPINGS = {
