@@ -752,10 +752,6 @@ class TextEncodeQwenImageEditSimpleXZ:
         zeroed_conditioning = []
         for t in conditioning:
             d = t[1].copy()
-            pooled_output = d.get("pooled_output", None)
-            if pooled_output is not None:
-                print("Had pooled_output. Keep it.")
-                d["pooled_output"] = torch.zeros_like(pooled_output)
             n = [torch.zeros_like(t[0]), d]
             zeroed_conditioning.append(n)
 
