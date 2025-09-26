@@ -619,7 +619,7 @@ class WanImageToVideoXZ:
 
 class TextEncodeQwenImageEditXZ:
     """
-    Same as `TextEncodeQwenImageEdit`, but returns the resolution the image was resized to, so that it can be sent to EmptySD3LatentImage.
+    Same as `TextEncodeQwenImageEdit`, but returns the resolution the image was resized to.
 
     Uses ImageResizeXZ method. Allows for specifying divisor, resizing method, and if cropping should be used.
     
@@ -627,6 +627,7 @@ class TextEncodeQwenImageEditXZ:
 
     https://github.com/comfyanonymous/ComfyUI/blob/341b4adefd308cbcf82c07effc255f2770b3b3e2/comfy_extras/nodes_qwen.py#L6
     """
+
     @classmethod
     def INPUT_TYPES(s):
         return {
@@ -638,7 +639,7 @@ class TextEncodeQwenImageEditXZ:
             },
             "optional": {
                 "resolution_scale": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 1000.0, "step":0.01, "round": False}),
-                "resolutions_to_scale": (["return_only", "image_only", "both", "neither"],),
+                "resolutions_to_scale": (["both", "return_only", "image_only", "neither"],),
                 "resizing_method": (["lanczos", "nearest-exact", "bilinear", "area", "bicubic", "bislerp",],),
                 "divisor": ("INT", {"default": 16, "min": 16, "max": 512, "step": 1,}),
                 "crop": (["center", "disabled"],),
@@ -697,6 +698,59 @@ class TextEncodeQwenImageEditXZ:
             return (conditioning, new_width_scaled, new_height_scaled,)
 
 
+class TextEncodeQwenImageEditSimpleXZ:
+    """
+    Same as `TextEncodeQwenImageEdit`, but allows you to specify the resolution that is used. Also will return the reference latent.
+
+    Allows for specifying resizing method and if cropping should be used.
+
+    https://github.com/comfyanonymous/ComfyUI/blob/341b4adefd308cbcf82c07effc255f2770b3b3e2/comfy_extras/nodes_qwen.py#L6
+    """
+
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+                "clip": ("CLIP",),
+                "vae": ("VAE",),
+                "prompt": ("STRING", {"multiline": True, "dynamicPrompts": True}),
+            },
+            "optional": {
+                "width": ("INT", {"default": 1024, "min": 16, "max": MAX_RESOLUTION, "step": 16}),
+                "height": ("INT", {"default": 1024, "min": 16, "max": MAX_RESOLUTION, "step": 16}),
+                "resizing_method": (["lanczos", "nearest-exact", "bilinear", "area", "bicubic", "bislerp",],),
+                "crop": (["center", "disabled"],),
+            }
+        }
+
+    RETURN_TYPES = ("CONDITIONING", "LATENT",)
+    RETURN_NAMES = ("CONDITIONING", "LATENT",)
+    FUNCTION = "encode"
+    CATEGORY = "xzuynodes"
+
+    def encode(self, image, clip, vae, prompt, width, height, resizing_method, crop):
+        image = comfy.utils.common_upscale(
+            image.movedim(-1, 1),
+            width,
+            height,
+            resizing_method,
+            crop,
+        ).movedim(1, -1)[:, :, :, :3]
+
+        ref_latent = vae.encode(image)
+        tokens = clip.tokenize(prompt, images=[image])
+        conditioning = clip.encode_from_tokens_scheduled(tokens)
+
+        conditioning = node_helpers.conditioning_set_values(
+            conditioning,
+            {"reference_latents": [ref_latent]},
+            append=True,
+        )
+
+        return (conditioning, {"samples": ref_latent},)
+
+
 NODE_CLASS_MAPPINGS = {
     "FirstLastFrameXZ": FirstLastFrameXZ,
     "ImageResizeKJ": ImageResizeKJ,
@@ -707,6 +761,7 @@ NODE_CLASS_MAPPINGS = {
     "TripleCLIPLoaderXZ": TripleCLIPLoaderXZ,
     "WanImageToVideoXZ": WanImageToVideoXZ,
     "TextEncodeQwenImageEditXZ": TextEncodeQwenImageEditXZ,
+    "TextEncodeQwenImageEditSimpleXZ": TextEncodeQwenImageEditSimpleXZ,
 }
 NODE_DISPLAY_NAME_MAPPINGS = {
     "FirstLastFrameXZ": "First/Last Frame (XZ)",
@@ -718,4 +773,5 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "TripleCLIPLoaderXZ": "TripleCLIPLoader (XZ)",
     "WanImageToVideoXZ": "WanImageToVideo (XZ)",
     "TextEncodeQwenImageEditXZ": "TextEncodeQwenImageEdit (XZ)",
+    "TextEncodeQwenImageEditSimpleXZ": "TextEncodeQwenImageEditSimple (XZ)",
 }
