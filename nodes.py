@@ -722,6 +722,7 @@ class TextEncodeQwenImageEditSimpleXZ:
                 "height": ("INT", {"default": 1024, "min": 16, "max": MAX_RESOLUTION, "step": 16}),
                 "resizing_method": (["lanczos", "nearest-exact", "bilinear", "area", "bicubic", "bislerp",],),
                 "crop": (["center", "disabled"],),
+                "encode_tiled": ("BOOLEAN", {"default": True}),
             }
         }
 
@@ -730,7 +731,7 @@ class TextEncodeQwenImageEditSimpleXZ:
     FUNCTION = "encode"
     CATEGORY = "xzuynodes"
 
-    def encode(self, image, clip, vae, prompt, width, height, resizing_method, crop):
+    def encode(self, image, clip, vae, prompt, width, height, resizing_method, crop, encode_tiled):
         image = comfy.utils.common_upscale(
             image.movedim(-1, 1),
             width,
@@ -739,7 +740,10 @@ class TextEncodeQwenImageEditSimpleXZ:
             crop,
         ).movedim(1, -1)[:, :, :, :3]
 
-        ref_latent = vae.encode(image)
+        if encode_tiled:
+            ref_latent = vae.encode_tiled(image, tile_x=512, tile_y=512, overlap=256, tile_t=64, overlap_t=8)
+        else:
+            ref_latent = vae.encode(image)
         tokens = clip.tokenize(prompt, images=[image])
         conditioning = clip.encode_from_tokens_scheduled(tokens)
 
@@ -748,12 +752,9 @@ class TextEncodeQwenImageEditSimpleXZ:
             {"reference_latents": [ref_latent]},
             append=True,
         )
-
-        zeroed_conditioning = []
-        for t in conditioning:
-            d = t[1].copy()
-            n = [torch.zeros_like(t[0]), d]
-            zeroed_conditioning.append(n)
+        zeroed_conditioning = [
+            [torch.zeros_like(t[0]), t[1].copy()] for t in conditioning
+        ]
 
         return (image, conditioning, zeroed_conditioning, {"samples": ref_latent},)
 
