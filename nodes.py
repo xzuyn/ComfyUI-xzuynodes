@@ -177,37 +177,17 @@ class ImageResizeXZ:
     CATEGORY = "xzuynodes"
     DESCRIPTION = "Resize image to maintain aspect ratio."
 
-    def resize(
-        self,
-        image,
-        width,
-        height,
-        upscale_method,
-        divisor,
-        crop,
-    ):
-        B, H, W, C = image.shape
-        original_pixels = W * H
-        aspect_ratio = W / H
+    def resize(self, image, width, height, upscale_method, divisor, crop):
+        _, H, W, _ = image.shape
         target_pixels = width * height
+        target_width = divisor * round(math.sqrt(target_pixels * (W / H)) / divisor)
+        target_height = divisor * round((target_pixels / target_width) / divisor)
 
-        if original_pixels == target_pixels:
-            new_width = divisor * round(W / divisor)
-            new_height = divisor * round(H / divisor)
-        else:
-            # Estimate width from aspect and target pixel count
-            ideal_width = math.sqrt(target_pixels * aspect_ratio)
-            new_width = divisor * round(ideal_width / divisor)
-
-            # Match pixel count
-            ideal_height = target_pixels / new_width
-            new_height = divisor * round(ideal_height / divisor)
-
-        image = image.movedim(-1, 1)
-        image = common_upscale(image, new_width, new_height, upscale_method, crop)
-        image = image.movedim(1, -1)
-
-        return (image, new_width, new_height,)
+        return (
+            common_upscale(image.movedim(-1, 1), target_width, target_height, upscale_method, crop).movedim(1, -1),
+            target_width,
+            target_height,
+        )
 
 
 class CLIPTextEncodeXZ(ComfyNodeABC):
