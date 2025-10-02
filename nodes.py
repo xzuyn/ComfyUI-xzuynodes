@@ -721,7 +721,7 @@ class TextEncodeQwenImageEditSimpleXZ:
         ).movedim(1, -1)[:, :, :, :3]
 
         if encode_tiled:
-            ref_latent = vae.encode_tiled(image, tile_x=512, tile_y=512, overlap=256, tile_t=64, overlap_t=8)
+            ref_latent = vae.encode_tiled(image, tile_x=512, tile_y=512, overlap=64, tile_t=64, overlap_t=8)
         else:
             ref_latent = vae.encode(image)
         tokens = clip.tokenize(prompt, images=[image])
