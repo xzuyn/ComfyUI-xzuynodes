@@ -77,7 +77,7 @@ class ImageResizeKJ:
                 "image": ("IMAGE",),
                 "width": ("INT", {"default": 512, "min": 0, "max": MAX_RESOLUTION, "step": 1,}),
                 "height": ("INT", {"default": 512, "min": 0, "max": MAX_RESOLUTION, "step": 1,}),
-                "upscale_method": (["lanczos", "nearest-exact", "bilinear", "area", "bicubic"],),
+                "upscale_method": (["lanczos", "nearest-exact", "bilinear", "area", "bicubic", "bislerp"],),
                 "keep_proportion": ("BOOLEAN", { "default": True}),
                 "divisible_by": ("INT", {"default": 8, "min": 0, "max": 512, "step": 1,}),
             },
@@ -618,7 +618,7 @@ class TextEncodeQwenImageEditXZ:
                 "prompt": ("STRING", {"multiline": True, "dynamicPrompts": True}),
             },
             "optional": {
-                "resolution_scale": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 1000.0, "step":0.01, "round": False}),
+                "resolution_scale": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 1000.0, "step": 0.01, "round": False}),
                 "resolutions_to_scale": (["both", "return_only", "image_only", "neither"],),
                 "resizing_method": (["lanczos", "nearest-exact", "bilinear", "area", "bicubic", "bislerp",],),
                 "divisor": ("INT", {"default": 16, "min": 16, "max": 512, "step": 1,}),
