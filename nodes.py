@@ -5,8 +5,6 @@ import torch
 import gc
 import psutil
 import math
-from PIL import ImageOps
-import numpy as np
 
 from nodes import MAX_RESOLUTION
 import comfy.sd
