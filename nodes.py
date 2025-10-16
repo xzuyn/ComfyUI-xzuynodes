@@ -474,6 +474,7 @@ class WanImageToVideoXZ:
                 "temporal_size": ("INT", {"default": 64, "min": 8, "max": 4096, "step": 4}),
                 "temporal_overlap": ("INT", {"default": 8, "min": 4, "max": 4096, "step": 4}),
                 "free_memory": ("BOOLEAN", {"default": True}),
+                "disable_cudnn": ("BOOLEAN", { "default": True}),
             },
             "optional": {
                 "clip_vision_output": ("CLIP_VISION_OUTPUT",),
@@ -524,6 +525,7 @@ class WanImageToVideoXZ:
         free_memory,
         start_image=None,
         clip_vision_output=None,
+        disable_cudnn=True,
     ):
         if free_memory:
             self._clear_memory()
@@ -548,14 +550,25 @@ class WanImageToVideoXZ:
             ) * 0.5
             image[:start_image.shape[0]] = start_image
 
-            concat_latent_image = vae.encode_tiled(
-                image[:, :, :, :3],
-                tile_x=tile_size,
-                tile_y=tile_size,
-                overlap=overlap,
-                tile_t=temporal_size,
-                overlap_t=temporal_overlap,
-            )
+            if disable_cudnn:
+                with torch.backends.cudnn.flags(enabled=False):
+                    concat_latent_image = vae.encode_tiled(
+                        image[:, :, :, :3],
+                        tile_x=tile_size,
+                        tile_y=tile_size,
+                        overlap=overlap,
+                        tile_t=temporal_size,
+                        overlap_t=temporal_overlap,
+                    )
+            else:
+                concat_latent_image = vae.encode_tiled(
+                    image[:, :, :, :3],
+                    tile_x=tile_size,
+                    tile_y=tile_size,
+                    overlap=overlap,
+                    tile_t=temporal_size,
+                    overlap_t=temporal_overlap,
+                )
 
             del image
 
@@ -621,6 +634,7 @@ class TextEncodeQwenImageEditXZ:
                 "resizing_method": (["lanczos", "nearest-exact", "bilinear", "area", "bicubic", "bislerp",],),
                 "divisor": ("INT", {"default": 16, "min": 16, "max": 512, "step": 1,}),
                 "crop": (["center", "disabled"],),
+                "disable_cudnn": ("BOOLEAN", { "default": True}),
             }
         }
 
@@ -629,7 +643,7 @@ class TextEncodeQwenImageEditXZ:
     FUNCTION = "encode"
     CATEGORY = "xzuynodes"
 
-    def encode(self, image, clip, vae, prompt, resolution_scale, resolutions_to_scale, resizing_method, divisor, crop):
+    def encode(self, image, clip, vae, prompt, resolution_scale, resolutions_to_scale, resizing_method, divisor, crop, disable_cudnn):
         B, H, W, C = image.shape
         aspect_ratio = W / H
         target_pixels = int(1024 * 1024)
@@ -660,7 +674,11 @@ class TextEncodeQwenImageEditXZ:
                 crop,
             ).movedim(1, -1)[:, :, :, :3]
 
-        ref_latent = vae.encode(image)
+        if disable_cudnn:
+            with torch.backends.cudnn.flags(enabled=False):
+                ref_latent = vae.encode(image)
+        else:
+            ref_latent = vae.encode(image)
         tokens = clip.tokenize(prompt, images=[image])
         conditioning = clip.encode_from_tokens_scheduled(tokens)
 
@@ -701,6 +719,7 @@ class TextEncodeQwenImageEditSimpleXZ:
                 "resizing_method": (["lanczos", "nearest-exact", "bilinear", "area", "bicubic", "bislerp",],),
                 "crop": (["center", "disabled"],),
                 "encode_tiled": ("BOOLEAN", {"default": True}),
+                "disable_cudnn": ("BOOLEAN", { "default": True}),
             }
         }
 
@@ -709,7 +728,7 @@ class TextEncodeQwenImageEditSimpleXZ:
     FUNCTION = "encode"
     CATEGORY = "xzuynodes"
 
-    def encode(self, image, clip, vae, prompt, width, height, resizing_method, crop, encode_tiled):
+    def encode(self, image, clip, vae, prompt, width, height, resizing_method, crop, encode_tiled, disable_cudnn):
         image = comfy.utils.common_upscale(
             image.movedim(-1, 1),
             width,
@@ -719,9 +738,17 @@ class TextEncodeQwenImageEditSimpleXZ:
         ).movedim(1, -1)[:, :, :, :3]
 
         if encode_tiled:
-            ref_latent = vae.encode_tiled(image, tile_x=512, tile_y=512, overlap=64, tile_t=64, overlap_t=8)
+            if disable_cudnn:
+                with torch.backends.cudnn.flags(enabled=False):
+                    ref_latent = vae.encode_tiled(image, tile_x=512, tile_y=512, overlap=64, tile_t=64, overlap_t=8)
+            else:
+                ref_latent = vae.encode_tiled(image, tile_x=512, tile_y=512, overlap=64, tile_t=64, overlap_t=8)
         else:
-            ref_latent = vae.encode(image)
+            if disable_cudnn:
+                with torch.backends.cudnn.flags(enabled=False):
+                    ref_latent = vae.encode(image)
+            else:
+                ref_latent = vae.encode(image)
         tokens = clip.tokenize(prompt, images=[image])
         conditioning = clip.encode_from_tokens_scheduled(tokens)
 
@@ -735,6 +762,59 @@ class TextEncodeQwenImageEditSimpleXZ:
         ]
 
         return (image, conditioning, zeroed_conditioning, {"samples": ref_latent},)
+
+
+class VAEEncode:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "pixels": ("IMAGE", ),
+                "vae": ("VAE", ),
+                "disable_cudnn": ("BOOLEAN", { "default": True}),
+            }
+        }
+    RETURN_TYPES = ("LATENT",)
+    FUNCTION = "encode"
+
+    CATEGORY = "xzuynodes"
+
+    def encode(self, vae, pixels, disable_cudnn=True):
+        if disable_cudnn:
+            with torch.backends.cudnn.flags(enabled=False):
+                t = vae.encode(pixels[:,:,:,:3])
+        else:
+            t = vae.encode(pixels[:,:,:,:3])
+
+        return ({"samples":t}, )
+
+
+class VAEEncodeTiled:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "pixels": ("IMAGE", ), "vae": ("VAE", ),
+                "tile_size": ("INT", {"default": 512, "min": 64, "max": 4096, "step": 64}),
+                "overlap": ("INT", {"default": 64, "min": 0, "max": 4096, "step": 32}),
+                "temporal_size": ("INT", {"default": 64, "min": 8, "max": 4096, "step": 4, "tooltip": "Only used for video VAEs: Amount of frames to encode at a time."}),
+                "temporal_overlap": ("INT", {"default": 8, "min": 4, "max": 4096, "step": 4, "tooltip": "Only used for video VAEs: Amount of frames to overlap."}),
+                "disable_cudnn": ("BOOLEAN", { "default": True}),
+            }
+        }
+    RETURN_TYPES = ("LATENT",)
+    FUNCTION = "encode"
+
+    CATEGORY = "xzuynodes"
+
+    def encode(self, vae, pixels, tile_size, overlap, temporal_size=64, temporal_overlap=8, disable_cudnn=True):
+        if disable_cudnn:
+            with torch.backends.cudnn.flags(enabled=False):
+                t = vae.encode_tiled(pixels[:,:,:,:3], tile_x=tile_size, tile_y=tile_size, overlap=overlap, tile_t=temporal_size, overlap_t=temporal_overlap)
+        else:
+            t = vae.encode_tiled(pixels[:,:,:,:3], tile_x=tile_size, tile_y=tile_size, overlap=overlap, tile_t=temporal_size, overlap_t=temporal_overlap)
+
+        return ({"samples": t}, )
 
 
 class VAEDecodeXZ:
