@@ -24,7 +24,8 @@ class FirstLastFrameXZ(ComfyNodeABC):
     def INPUT_TYPES(cls):
         files = folder_paths.filter_files_content_types(
             [
-                f for f in os.listdir(folder_paths.get_input_directory())
+                f
+                for f in os.listdir(folder_paths.get_input_directory())
                 if os.path.isfile(os.path.join(folder_paths.get_input_directory(), f))
             ],
             ["video"],
@@ -73,11 +74,44 @@ class ImageResizeKJ:
         return {
             "required": {
                 "image": ("IMAGE",),
-                "width": ("INT", {"default": 512, "min": 0, "max": MAX_RESOLUTION, "step": 1,}),
-                "height": ("INT", {"default": 512, "min": 0, "max": MAX_RESOLUTION, "step": 1,}),
-                "upscale_method": (["lanczos", "nearest-exact", "bilinear", "area", "bicubic", "bislerp"],),
-                "keep_proportion": ("BOOLEAN", { "default": True}),
-                "divisible_by": ("INT", {"default": 8, "min": 0, "max": 512, "step": 1,}),
+                "width": (
+                    "INT",
+                    {
+                        "default": 512,
+                        "min": 0,
+                        "max": MAX_RESOLUTION,
+                        "step": 1,
+                    },
+                ),
+                "height": (
+                    "INT",
+                    {
+                        "default": 512,
+                        "min": 0,
+                        "max": MAX_RESOLUTION,
+                        "step": 1,
+                    },
+                ),
+                "upscale_method": (
+                    [
+                        "lanczos",
+                        "nearest-exact",
+                        "bilinear",
+                        "area",
+                        "bicubic",
+                        "bislerp",
+                    ],
+                ),
+                "keep_proportion": ("BOOLEAN", {"default": True}),
+                "divisible_by": (
+                    "INT",
+                    {
+                        "default": 8,
+                        "min": 0,
+                        "max": 512,
+                        "step": 1,
+                    },
+                ),
             },
             "optional": {
                 "width_input": ("INT", {"forceInput": True}),
@@ -87,8 +121,16 @@ class ImageResizeKJ:
             },
         }
 
-    RETURN_TYPES = ("IMAGE", "INT", "INT",)
-    RETURN_NAMES = ("IMAGE", "width", "height",)
+    RETURN_TYPES = (
+        "IMAGE",
+        "INT",
+        "INT",
+    )
+    RETURN_NAMES = (
+        "IMAGE",
+        "width",
+        "height",
+    )
     FUNCTION = "resize"
     CATEGORY = "xzuynodes"
     DESCRIPTION = """
@@ -152,7 +194,11 @@ highest dimension.
         image = common_upscale(image, width, height, upscale_method, crop)
         image = image.movedim(1, -1)
 
-        return (image, image.shape[2], image.shape[1],)
+        return (
+            image,
+            image.shape[2],
+            image.shape[1],
+        )
 
 
 class ImageResizeXZ:
@@ -161,16 +207,50 @@ class ImageResizeXZ:
         return {
             "required": {
                 "image": ("IMAGE",),
-                "width": ("INT", {"default": 512, "min": 1, "max": MAX_RESOLUTION, "step": 1,}),
-                "height": ("INT", {"default": 512, "min": 1, "max": MAX_RESOLUTION, "step": 1,}),
-                "upscale_method": (["lanczos", "nearest-exact", "bilinear", "area", "bicubic"],),
-                "divisor": ("INT", {"default": 8, "min": 1, "max": 512, "step": 1,}),
+                "width": (
+                    "INT",
+                    {
+                        "default": 512,
+                        "min": 1,
+                        "max": MAX_RESOLUTION,
+                        "step": 1,
+                    },
+                ),
+                "height": (
+                    "INT",
+                    {
+                        "default": 512,
+                        "min": 1,
+                        "max": MAX_RESOLUTION,
+                        "step": 1,
+                    },
+                ),
+                "upscale_method": (
+                    ["lanczos", "nearest-exact", "bilinear", "area", "bicubic"],
+                ),
+                "divisor": (
+                    "INT",
+                    {
+                        "default": 8,
+                        "min": 1,
+                        "max": 512,
+                        "step": 1,
+                    },
+                ),
                 "crop": (["center", "disabled"],),
             },
         }
 
-    RETURN_TYPES = ("IMAGE", "INT", "INT",)
-    RETURN_NAMES = ("IMAGE", "width", "height",)
+    RETURN_TYPES = (
+        "IMAGE",
+        "INT",
+        "INT",
+    )
+    RETURN_NAMES = (
+        "IMAGE",
+        "width",
+        "height",
+    )
     FUNCTION = "resize"
     CATEGORY = "xzuynodes"
     DESCRIPTION = "Resize image to maintain aspect ratio."
@@ -182,7 +262,9 @@ class ImageResizeXZ:
         target_height = divisor * round((target_pixels / target_width) / divisor)
 
         return (
-            common_upscale(image.movedim(-1, 1), target_width, target_height, upscale_method, crop).movedim(1, -1),
+            common_upscale(
+                image.movedim(-1, 1), target_width, target_height, upscale_method, crop
+            ).movedim(1, -1),
             target_width,
             target_height,
         )
@@ -205,10 +287,23 @@ class CLIPTextEncodeXZ(ComfyNodeABC):
     def INPUT_TYPES(cls) -> dict:
         return {
             "required": {
-                "text": (IO.STRING, {"multiline": True, "dynamicPrompts": True, "tooltip": "The text to be encoded."}),
-                "clip": (IO.CLIP, {"tooltip": "The CLIP model used for encoding the text."}),
+                "text": (
+                    IO.STRING,
+                    {
+                        "multiline": True,
+                        "dynamicPrompts": True,
+                        "tooltip": "The text to be encoded.",
+                    },
+                ),
+                "clip": (
+                    IO.CLIP,
+                    {"tooltip": "The CLIP model used for encoding the text."},
+                ),
                 "split_string": (
-                    ["\\n", ",", "."], {"tooltip": "Delimiter on which to split the prompt before encoding."}
+                    ["\\n", ",", "."],
+                    {
+                        "tooltip": "Delimiter on which to split the prompt before encoding."
+                    },
                 ),
                 "method": (["average", "combine"],),
                 "use_mask": ("BOOLEAN", {"default": False}),
@@ -288,9 +383,9 @@ class CLIPTextEncodeXZ(ComfyNodeABC):
                 mask_stack = torch.stack(masks, dim=0)
 
                 masked = stacked * mask_stack.unsqueeze(-1)  # zero out padded positions
-                sum_t = masked.sum(dim=0)                    # sum over segments
+                sum_t = masked.sum(dim=0)  # sum over segments
                 counts = mask_stack.sum(dim=0).clamp(min=1)  # counts of valid tokens
-                mean_t = sum_t / counts.unsqueeze(-1)        # divide by counts
+                mean_t = sum_t / counts.unsqueeze(-1)  # divide by counts
             else:
                 stacked = torch.stack(padded, dim=0)
                 mean_t = torch.mean(stacked, dim=0)
@@ -321,8 +416,19 @@ class CLIPLoaderXZ:
                 "clip_name": (folder_paths.get_filename_list("text_encoders"),),
                 "type": (
                     [
-                        "stable_diffusion", "stable_cascade", "sd3", "stable_audio", "mochi",
-                        "ltxv", "pixart", "cosmos", "lumina2", "wan", "hidream", "chroma", "ace"
+                        "stable_diffusion",
+                        "stable_cascade",
+                        "sd3",
+                        "stable_audio",
+                        "mochi",
+                        "ltxv",
+                        "pixart",
+                        "cosmos",
+                        "lumina2",
+                        "wan",
+                        "hidream",
+                        "chroma",
+                        "ace",
                     ],
                 ),
             },
@@ -348,11 +454,15 @@ class CLIPLoaderXZ:
     )
 
     def load_clip(self, clip_name, type="stable_diffusion", device="default"):
-        clip_type = getattr(comfy.sd.CLIPType, type.upper(), comfy.sd.CLIPType.STABLE_DIFFUSION)
+        clip_type = getattr(
+            comfy.sd.CLIPType, type.upper(), comfy.sd.CLIPType.STABLE_DIFFUSION
+        )
 
         model_options = {}
         if device == "cpu":
-            model_options["load_device"] = model_options["offload_device"] = torch.device("cpu")
+            model_options["load_device"] = model_options["offload_device"] = (
+                torch.device("cpu")
+            )
         elif device == "cuda:0":
             model_options["load_device"] = torch.device(device)
 
@@ -382,8 +492,10 @@ class DualCLIPLoaderXZ:
                 "type": (["sdxl", "sd3", "flux", "hunyuan_video", "hidream"],),
             },
             "optional": {
-                "device": (["default", "cpu", "cuda:0"], {"advanced": True}),}
+                "device": (["default", "cpu", "cuda:0"], {"advanced": True}),
+            },
         }
+
     RETURN_TYPES = ("CLIP",)
     FUNCTION = "load_clip"
 
@@ -398,18 +510,27 @@ class DualCLIPLoaderXZ:
     )
 
     def load_clip(self, clip_name1, clip_name2, type, device="default"):
-        clip_type = getattr(comfy.sd.CLIPType, type.upper(), comfy.sd.CLIPType.STABLE_DIFFUSION)
+        clip_type = getattr(
+            comfy.sd.CLIPType, type.upper(), comfy.sd.CLIPType.STABLE_DIFFUSION
+        )
 
         clip_path1 = folder_paths.get_full_path_or_raise("text_encoders", clip_name1)
         clip_path2 = folder_paths.get_full_path_or_raise("text_encoders", clip_name2)
 
         model_options = {}
         if device == "cpu":
-            model_options["load_device"] = model_options["offload_device"] = torch.device("cpu")
+            model_options["load_device"] = model_options["offload_device"] = (
+                torch.device("cpu")
+            )
         elif device == "cuda:0":
             model_options["load_device"] = torch.device(device)
 
-        clip = comfy.sd.load_clip(ckpt_paths=[clip_path1, clip_path2], embedding_directory=folder_paths.get_folder_paths("embeddings"), clip_type=clip_type, model_options=model_options)
+        clip = comfy.sd.load_clip(
+            ckpt_paths=[clip_path1, clip_path2],
+            embedding_directory=folder_paths.get_folder_paths("embeddings"),
+            clip_type=clip_type,
+            model_options=model_options,
+        )
         return (clip,)
 
 
@@ -418,14 +539,15 @@ class TripleCLIPLoaderXZ:
     def INPUT_TYPES(s):
         return {
             "required": {
-                "clip_name1": (folder_paths.get_filename_list("text_encoders"), ),
-                "clip_name2": (folder_paths.get_filename_list("text_encoders"), ),
-                "clip_name3": (folder_paths.get_filename_list("text_encoders"), )
+                "clip_name1": (folder_paths.get_filename_list("text_encoders"),),
+                "clip_name2": (folder_paths.get_filename_list("text_encoders"),),
+                "clip_name3": (folder_paths.get_filename_list("text_encoders"),),
             },
             "optional": {
                 "device": (["default", "cpu", "cuda:0"], {"advanced": True}),
             },
         }
+
     RETURN_TYPES = ("CLIP",)
     FUNCTION = "load_clip"
     CATEGORY = "xzuynodes"
@@ -434,7 +556,9 @@ class TripleCLIPLoaderXZ:
     def load_clip(self, clip_name1, clip_name2, clip_name3, device="default"):
         model_options = {}
         if device == "cpu":
-            model_options["load_device"] = model_options["offload_device"] = torch.device("cpu")
+            model_options["load_device"] = model_options["offload_device"] = (
+                torch.device("cpu")
+            )
         elif device == "cuda:0":
             model_options["load_device"] = torch.device(device)
 
@@ -465,16 +589,34 @@ class WanImageToVideoXZ:
                 "positive": ("CONDITIONING",),
                 "negative": ("CONDITIONING",),
                 "vae": ("VAE",),
-                "width": ("INT", {"default": 832, "min": 16, "max": MAX_RESOLUTION, "step": 16}),
-                "height": ("INT", {"default": 480, "min": 16, "max": MAX_RESOLUTION, "step": 16}),
-                "length": ("INT", {"default": 81, "min": 1, "max": MAX_RESOLUTION, "step": 4}),
+                "width": (
+                    "INT",
+                    {"default": 832, "min": 16, "max": MAX_RESOLUTION, "step": 16},
+                ),
+                "height": (
+                    "INT",
+                    {"default": 480, "min": 16, "max": MAX_RESOLUTION, "step": 16},
+                ),
+                "length": (
+                    "INT",
+                    {"default": 81, "min": 1, "max": MAX_RESOLUTION, "step": 4},
+                ),
                 "batch_size": ("INT", {"default": 1, "min": 1, "max": 4096}),
-                "tile_size": ("INT", {"default": 512, "min": 64, "max": 4096, "step": 64}),
+                "tile_size": (
+                    "INT",
+                    {"default": 512, "min": 64, "max": 4096, "step": 64},
+                ),
                 "overlap": ("INT", {"default": 64, "min": 0, "max": 4096, "step": 32}),
-                "temporal_size": ("INT", {"default": 64, "min": 8, "max": 4096, "step": 4}),
-                "temporal_overlap": ("INT", {"default": 8, "min": 4, "max": 4096, "step": 4}),
+                "temporal_size": (
+                    "INT",
+                    {"default": 64, "min": 8, "max": 4096, "step": 4},
+                ),
+                "temporal_overlap": (
+                    "INT",
+                    {"default": 8, "min": 4, "max": 4096, "step": 4},
+                ),
                 "free_memory": ("BOOLEAN", {"default": True}),
-                "disable_cudnn": ("BOOLEAN", { "default": True}),
+                "disable_cudnn": ("BOOLEAN", {"default": True}),
             },
             "optional": {
                 "clip_vision_output": ("CLIP_VISION_OUTPUT",),
@@ -498,7 +640,9 @@ class WanImageToVideoXZ:
             torch.cuda.empty_cache()
             after = torch.cuda.memory_allocated()
             freed = (before - after) / 1e9
-            print(f"GPU VRAM: before={before/1e9:.2f} GB, after={after/1e9:.2f} GB, freed={freed:.2f} GB")
+            print(
+                f"GPU VRAM: before={before/1e9:.2f} GB, after={after/1e9:.2f} GB, freed={freed:.2f} GB"
+            )
             del before, after, freed
 
         # System RAM cleanup
@@ -506,7 +650,9 @@ class WanImageToVideoXZ:
         collected = gc.collect()
         print(f"Garbage collector collected {collected} objects.")
         ram_after = psutil.virtual_memory().percent
-        print(f"System RAM: before={ram_before:.1f}%, after={ram_after:.1f}%, freed={ram_before - ram_after:.1f}%")
+        print(
+            f"System RAM: before={ram_before:.1f}%, after={ram_after:.1f}%, freed={ram_before - ram_after:.1f}%"
+        )
         del ram_before, ram_after, collected
 
     def encode(
@@ -543,12 +689,15 @@ class WanImageToVideoXZ:
                 "bilinear",
                 "center",
             ).movedim(1, -1)
-            image = torch.ones(
-                (length, height, width, start_image.shape[-1]),
-                device=start_image.device,
-                dtype=start_image.dtype,
-            ) * 0.5
-            image[:start_image.shape[0]] = start_image
+            image = (
+                torch.ones(
+                    (length, height, width, start_image.shape[-1]),
+                    device=start_image.device,
+                    dtype=start_image.dtype,
+                )
+                * 0.5
+            )
+            image[: start_image.shape[0]] = start_image
 
             if disable_cudnn:
                 with torch.backends.cudnn.flags(enabled=False):
@@ -573,11 +722,17 @@ class WanImageToVideoXZ:
             del image
 
             mask = torch.ones(
-                (1, 1, latent.shape[2], concat_latent_image.shape[-2], concat_latent_image.shape[-1]),
+                (
+                    1,
+                    1,
+                    latent.shape[2],
+                    concat_latent_image.shape[-2],
+                    concat_latent_image.shape[-1],
+                ),
                 device=start_image.device,
                 dtype=start_image.dtype,
             )
-            mask[:, :, :((start_image.shape[0] - 1) // 4) + 1] = 0.0
+            mask[:, :, : ((start_image.shape[0] - 1) // 4) + 1] = 0.0
 
             del start_image
 
@@ -613,7 +768,7 @@ class TextEncodeQwenImageEditXZ:
     Same as `TextEncodeQwenImageEdit`, but returns the resolution the image was resized to.
 
     Uses ImageResizeXZ method. Allows for specifying divisor, resizing method, and if cropping should be used.
-    
+
     You can also scale the hardcoded 1024*1024 pixel count target, with the option to scale only the width and height returns.
 
     https://github.com/comfyanonymous/ComfyUI/blob/341b4adefd308cbcf82c07effc255f2770b3b3e2/comfy_extras/nodes_qwen.py#L6
@@ -629,21 +784,69 @@ class TextEncodeQwenImageEditXZ:
                 "prompt": ("STRING", {"multiline": True, "dynamicPrompts": True}),
             },
             "optional": {
-                "resolution_scale": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 1000.0, "step": 0.01, "round": False}),
-                "resolutions_to_scale": (["both", "return_only", "image_only", "neither"],),
-                "resizing_method": (["lanczos", "nearest-exact", "bilinear", "area", "bicubic", "bislerp",],),
-                "divisor": ("INT", {"default": 16, "min": 16, "max": 512, "step": 1,}),
+                "resolution_scale": (
+                    "FLOAT",
+                    {
+                        "default": 1.0,
+                        "min": 0.0,
+                        "max": 1000.0,
+                        "step": 0.01,
+                        "round": False,
+                    },
+                ),
+                "resolutions_to_scale": (
+                    ["both", "return_only", "image_only", "neither"],
+                ),
+                "resizing_method": (
+                    [
+                        "lanczos",
+                        "nearest-exact",
+                        "bilinear",
+                        "area",
+                        "bicubic",
+                        "bislerp",
+                    ],
+                ),
+                "divisor": (
+                    "INT",
+                    {
+                        "default": 16,
+                        "min": 16,
+                        "max": 512,
+                        "step": 1,
+                    },
+                ),
                 "crop": (["center", "disabled"],),
-                "disable_cudnn": ("BOOLEAN", { "default": True}),
-            }
+                "disable_cudnn": ("BOOLEAN", {"default": True}),
+            },
         }
 
-    RETURN_TYPES = ("CONDITIONING", "INT", "INT",)
-    RETURN_NAMES = ("CONDITIONING", "width", "height",)
+    RETURN_TYPES = (
+        "CONDITIONING",
+        "INT",
+        "INT",
+    )
+    RETURN_NAMES = (
+        "CONDITIONING",
+        "width",
+        "height",
+    )
     FUNCTION = "encode"
     CATEGORY = "xzuynodes"
 
-    def encode(self, image, clip, vae, prompt, resolution_scale, resolutions_to_scale, resizing_method, divisor, crop, disable_cudnn):
+    def encode(
+        self,
+        image,
+        clip,
+        vae,
+        prompt,
+        resolution_scale,
+        resolutions_to_scale,
+        resizing_method,
+        divisor,
+        crop,
+        disable_cudnn,
+    ):
         B, H, W, C = image.shape
         aspect_ratio = W / H
         target_pixels = int(1024 * 1024)
@@ -689,15 +892,23 @@ class TextEncodeQwenImageEditXZ:
         )
 
         if resolutions_to_scale == "image_only" or resolutions_to_scale == "neither":
-            return (conditioning, new_width, new_height,)
+            return (
+                conditioning,
+                new_width,
+                new_height,
+            )
         else:  # output_only or both
-            return (conditioning, new_width_scaled, new_height_scaled,)
+            return (
+                conditioning,
+                new_width_scaled,
+                new_height_scaled,
+            )
 
 
 class TextEncodeQwenImageEditSimpleXZ:
     """
     Same as `TextEncodeQwenImageEdit`, but allows you to specify the resolution used as well as resizing method and if cropping should be used.
-    
+
     It will return the reference latent, and a zeroed out conditioning.
 
     https://github.com/comfyanonymous/ComfyUI/blob/341b4adefd308cbcf82c07effc255f2770b3b3e2/comfy_extras/nodes_qwen.py#L6
@@ -714,21 +925,58 @@ class TextEncodeQwenImageEditSimpleXZ:
                 "prompt": ("STRING", {"multiline": True, "dynamicPrompts": True}),
             },
             "optional": {
-                "width": ("INT", {"default": 1024, "min": 16, "max": MAX_RESOLUTION, "step": 16}),
-                "height": ("INT", {"default": 1024, "min": 16, "max": MAX_RESOLUTION, "step": 16}),
-                "resizing_method": (["lanczos", "nearest-exact", "bilinear", "area", "bicubic", "bislerp",],),
+                "width": (
+                    "INT",
+                    {"default": 1024, "min": 16, "max": MAX_RESOLUTION, "step": 16},
+                ),
+                "height": (
+                    "INT",
+                    {"default": 1024, "min": 16, "max": MAX_RESOLUTION, "step": 16},
+                ),
+                "resizing_method": (
+                    [
+                        "lanczos",
+                        "nearest-exact",
+                        "bilinear",
+                        "area",
+                        "bicubic",
+                        "bislerp",
+                    ],
+                ),
                 "crop": (["center", "disabled"],),
                 "encode_tiled": ("BOOLEAN", {"default": True}),
-                "disable_cudnn": ("BOOLEAN", { "default": True}),
-            }
+                "disable_cudnn": ("BOOLEAN", {"default": True}),
+            },
         }
 
-    RETURN_TYPES = ("IMAGE", "CONDITIONING", "CONDITIONING", "LATENT",)
-    RETURN_NAMES = ("IMAGE", "CONDITIONING", "ZEROED_CONDITIONING", "LATENT",)
+    RETURN_TYPES = (
+        "IMAGE",
+        "CONDITIONING",
+        "CONDITIONING",
+        "LATENT",
+    )
+    RETURN_NAMES = (
+        "IMAGE",
+        "CONDITIONING",
+        "ZEROED_CONDITIONING",
+        "LATENT",
+    )
     FUNCTION = "encode"
     CATEGORY = "xzuynodes"
 
-    def encode(self, image, clip, vae, prompt, width, height, resizing_method, crop, encode_tiled, disable_cudnn):
+    def encode(
+        self,
+        image,
+        clip,
+        vae,
+        prompt,
+        width,
+        height,
+        resizing_method,
+        crop,
+        encode_tiled,
+        disable_cudnn,
+    ):
         image = comfy.utils.common_upscale(
             image.movedim(-1, 1),
             width,
@@ -740,9 +988,18 @@ class TextEncodeQwenImageEditSimpleXZ:
         if encode_tiled:
             if disable_cudnn:
                 with torch.backends.cudnn.flags(enabled=False):
-                    ref_latent = vae.encode_tiled(image, tile_x=512, tile_y=512, overlap=64, tile_t=64, overlap_t=8)
+                    ref_latent = vae.encode_tiled(
+                        image,
+                        tile_x=512,
+                        tile_y=512,
+                        overlap=64,
+                        tile_t=64,
+                        overlap_t=8,
+                    )
             else:
-                ref_latent = vae.encode_tiled(image, tile_x=512, tile_y=512, overlap=64, tile_t=64, overlap_t=8)
+                ref_latent = vae.encode_tiled(
+                    image, tile_x=512, tile_y=512, overlap=64, tile_t=64, overlap_t=8
+                )
         else:
             if disable_cudnn:
                 with torch.backends.cudnn.flags(enabled=False):
@@ -761,7 +1018,12 @@ class TextEncodeQwenImageEditSimpleXZ:
             [torch.zeros_like(t[0]), t[1].copy()] for t in conditioning
         ]
 
-        return (image, conditioning, zeroed_conditioning, {"samples": ref_latent},)
+        return (
+            image,
+            conditioning,
+            zeroed_conditioning,
+            {"samples": ref_latent},
+        )
 
 
 class VAEEncode:
@@ -769,11 +1031,12 @@ class VAEEncode:
     def INPUT_TYPES(s):
         return {
             "required": {
-                "pixels": ("IMAGE", ),
-                "vae": ("VAE", ),
-                "disable_cudnn": ("BOOLEAN", { "default": True}),
+                "pixels": ("IMAGE",),
+                "vae": ("VAE",),
+                "disable_cudnn": ("BOOLEAN", {"default": True}),
             }
         }
+
     RETURN_TYPES = ("LATENT",)
     FUNCTION = "encode"
 
@@ -782,11 +1045,11 @@ class VAEEncode:
     def encode(self, vae, pixels, disable_cudnn=True):
         if disable_cudnn:
             with torch.backends.cudnn.flags(enabled=False):
-                t = vae.encode(pixels[:,:,:,:3])
+                t = vae.encode(pixels[:, :, :, :3])
         else:
-            t = vae.encode(pixels[:,:,:,:3])
+            t = vae.encode(pixels[:, :, :, :3])
 
-        return ({"samples":t}, )
+        return ({"samples": t},)
 
 
 class VAEEncodeTiled:
@@ -794,27 +1057,73 @@ class VAEEncodeTiled:
     def INPUT_TYPES(s):
         return {
             "required": {
-                "pixels": ("IMAGE", ), "vae": ("VAE", ),
-                "tile_size": ("INT", {"default": 512, "min": 64, "max": 4096, "step": 64}),
+                "pixels": ("IMAGE",),
+                "vae": ("VAE",),
+                "tile_size": (
+                    "INT",
+                    {"default": 512, "min": 64, "max": 4096, "step": 64},
+                ),
                 "overlap": ("INT", {"default": 64, "min": 0, "max": 4096, "step": 32}),
-                "temporal_size": ("INT", {"default": 64, "min": 8, "max": 4096, "step": 4, "tooltip": "Only used for video VAEs: Amount of frames to encode at a time."}),
-                "temporal_overlap": ("INT", {"default": 8, "min": 4, "max": 4096, "step": 4, "tooltip": "Only used for video VAEs: Amount of frames to overlap."}),
-                "disable_cudnn": ("BOOLEAN", { "default": True}),
+                "temporal_size": (
+                    "INT",
+                    {
+                        "default": 64,
+                        "min": 8,
+                        "max": 4096,
+                        "step": 4,
+                        "tooltip": "Only used for video VAEs: Amount of frames to encode at a time.",
+                    },
+                ),
+                "temporal_overlap": (
+                    "INT",
+                    {
+                        "default": 8,
+                        "min": 4,
+                        "max": 4096,
+                        "step": 4,
+                        "tooltip": "Only used for video VAEs: Amount of frames to overlap.",
+                    },
+                ),
+                "disable_cudnn": ("BOOLEAN", {"default": True}),
             }
         }
+
     RETURN_TYPES = ("LATENT",)
     FUNCTION = "encode"
 
     CATEGORY = "xzuynodes"
 
-    def encode(self, vae, pixels, tile_size, overlap, temporal_size=64, temporal_overlap=8, disable_cudnn=True):
+    def encode(
+        self,
+        vae,
+        pixels,
+        tile_size,
+        overlap,
+        temporal_size=64,
+        temporal_overlap=8,
+        disable_cudnn=True,
+    ):
         if disable_cudnn:
             with torch.backends.cudnn.flags(enabled=False):
-                t = vae.encode_tiled(pixels[:,:,:,:3], tile_x=tile_size, tile_y=tile_size, overlap=overlap, tile_t=temporal_size, overlap_t=temporal_overlap)
+                t = vae.encode_tiled(
+                    pixels[:, :, :, :3],
+                    tile_x=tile_size,
+                    tile_y=tile_size,
+                    overlap=overlap,
+                    tile_t=temporal_size,
+                    overlap_t=temporal_overlap,
+                )
         else:
-            t = vae.encode_tiled(pixels[:,:,:,:3], tile_x=tile_size, tile_y=tile_size, overlap=overlap, tile_t=temporal_size, overlap_t=temporal_overlap)
+            t = vae.encode_tiled(
+                pixels[:, :, :, :3],
+                tile_x=tile_size,
+                tile_y=tile_size,
+                overlap=overlap,
+                tile_t=temporal_size,
+                overlap_t=temporal_overlap,
+            )
 
-        return ({"samples": t}, )
+        return ({"samples": t},)
 
 
 class VAEDecodeXZ:
@@ -823,10 +1132,14 @@ class VAEDecodeXZ:
         return {
             "required": {
                 "samples": ("LATENT", {"tooltip": "The latent to be decoded."}),
-                "vae": ("VAE", {"tooltip": "The VAE model used for decoding the latent."}),
-                "disable_cudnn": ("BOOLEAN", { "default": True}),
+                "vae": (
+                    "VAE",
+                    {"tooltip": "The VAE model used for decoding the latent."},
+                ),
+                "disable_cudnn": ("BOOLEAN", {"default": True}),
             }
         }
+
     RETURN_TYPES = ("IMAGE",)
     OUTPUT_TOOLTIPS = ("The decoded image.",)
     FUNCTION = "decode"
@@ -841,28 +1154,65 @@ class VAEDecodeXZ:
         else:
             images = vae.decode(samples["samples"])
 
-        if len(images.shape) == 5: #Combine batches
-            images = images.reshape(-1, images.shape[-3], images.shape[-2], images.shape[-1])
+        if len(images.shape) == 5:  # Combine batches
+            images = images.reshape(
+                -1, images.shape[-3], images.shape[-2], images.shape[-1]
+            )
 
-        return (images, )
+        return (images,)
 
 
 class VAEDecodeTiledXZ:
     @classmethod
     def INPUT_TYPES(s):
-        return {"required": {"samples": ("LATENT", ), "vae": ("VAE", ),
-                             "tile_size": ("INT", {"default": 512, "min": 64, "max": 4096, "step": 32}),
-                             "overlap": ("INT", {"default": 64, "min": 0, "max": 4096, "step": 32}),
-                             "temporal_size": ("INT", {"default": 64, "min": 8, "max": 4096, "step": 4, "tooltip": "Only used for video VAEs: Amount of frames to decode at a time."}),
-                             "temporal_overlap": ("INT", {"default": 8, "min": 4, "max": 4096, "step": 4, "tooltip": "Only used for video VAEs: Amount of frames to overlap."}),
-                             "disable_cudnn": ("BOOLEAN", { "default": True}),
-                            }}
+        return {
+            "required": {
+                "samples": ("LATENT",),
+                "vae": ("VAE",),
+                "tile_size": (
+                    "INT",
+                    {"default": 512, "min": 64, "max": 4096, "step": 32},
+                ),
+                "overlap": ("INT", {"default": 64, "min": 0, "max": 4096, "step": 32}),
+                "temporal_size": (
+                    "INT",
+                    {
+                        "default": 64,
+                        "min": 8,
+                        "max": 4096,
+                        "step": 4,
+                        "tooltip": "Only used for video VAEs: Amount of frames to decode at a time.",
+                    },
+                ),
+                "temporal_overlap": (
+                    "INT",
+                    {
+                        "default": 8,
+                        "min": 4,
+                        "max": 4096,
+                        "step": 4,
+                        "tooltip": "Only used for video VAEs: Amount of frames to overlap.",
+                    },
+                ),
+                "disable_cudnn": ("BOOLEAN", {"default": True}),
+            }
+        }
+
     RETURN_TYPES = ("IMAGE",)
     FUNCTION = "decode"
 
     CATEGORY = "xzuynodes"
 
-    def decode(self, vae, samples, tile_size, overlap=64, temporal_size=64, temporal_overlap=8, disable_cudnn=True):
+    def decode(
+        self,
+        vae,
+        samples,
+        tile_size,
+        overlap=64,
+        temporal_size=64,
+        temporal_overlap=8,
+        disable_cudnn=True,
+    ):
         if tile_size < overlap * 4:
             overlap = tile_size // 4
         if temporal_size < temporal_overlap * 2:
@@ -870,7 +1220,9 @@ class VAEDecodeTiledXZ:
         temporal_compression = vae.temporal_compression_decode()
         if temporal_compression is not None:
             temporal_size = max(2, temporal_size // temporal_compression)
-            temporal_overlap = max(1, min(temporal_size // 2, temporal_overlap // temporal_compression))
+            temporal_overlap = max(
+                1, min(temporal_size // 2, temporal_overlap // temporal_compression)
+            )
         else:
             temporal_size = None
             temporal_overlap = None
@@ -878,15 +1230,31 @@ class VAEDecodeTiledXZ:
         if disable_cudnn:
             with torch.backends.cudnn.flags(enabled=False):
                 compression = vae.spacial_compression_decode()
-                images = vae.decode_tiled(samples["samples"], tile_x=tile_size // compression, tile_y=tile_size // compression, overlap=overlap // compression, tile_t=temporal_size, overlap_t=temporal_overlap)
+                images = vae.decode_tiled(
+                    samples["samples"],
+                    tile_x=tile_size // compression,
+                    tile_y=tile_size // compression,
+                    overlap=overlap // compression,
+                    tile_t=temporal_size,
+                    overlap_t=temporal_overlap,
+                )
         else:
             compression = vae.spacial_compression_decode()
-            images = vae.decode_tiled(samples["samples"], tile_x=tile_size // compression, tile_y=tile_size // compression, overlap=overlap // compression, tile_t=temporal_size, overlap_t=temporal_overlap)
+            images = vae.decode_tiled(
+                samples["samples"],
+                tile_x=tile_size // compression,
+                tile_y=tile_size // compression,
+                overlap=overlap // compression,
+                tile_t=temporal_size,
+                overlap_t=temporal_overlap,
+            )
 
-        if len(images.shape) == 5: #Combine batches
-            images = images.reshape(-1, images.shape[-3], images.shape[-2], images.shape[-1])
+        if len(images.shape) == 5:  # Combine batches
+            images = images.reshape(
+                -1, images.shape[-3], images.shape[-2], images.shape[-1]
+            )
 
-        return (images, )
+        return (images,)
 
 
 NODE_CLASS_MAPPINGS = {
