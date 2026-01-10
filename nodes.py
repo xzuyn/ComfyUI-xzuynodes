@@ -6,18 +6,25 @@ import gc
 import psutil
 import math
 
-from nodes import MAX_RESOLUTION
 import comfy.sd
-from comfy_api.input_impl import VideoFromFile
-from comfy.comfy_types import IO, ComfyNodeABC
-from comfy.utils import ProgressBar, common_upscale
+import comfy.samplers
 import comfy.model_management as mm
 import node_helpers
+
+from typing import Union, Tuple
+from typing_extensions import override
+from PIL import Image
+
+from nodes import MAX_RESOLUTION
+from comfy_api.input_impl import VideoFromFile
+from comfy_api.latest import ComfyExtension, io
+from comfy.comfy_types import IO, ComfyNodeABC
+from comfy.utils import ProgressBar, common_upscale
 
 
 class FirstLastFrameXZ(ComfyNodeABC):
     """
-    Extracts the first or last frame from a selected video file.
+    Extracts the first and last frame from a selected video file.
     """
 
     @classmethod
@@ -33,12 +40,14 @@ class FirstLastFrameXZ(ComfyNodeABC):
         return {
             "required": {
                 "file": (sorted(files), {"video_upload": True}),
-                "first_or_last": (["first", "last"],),
             }
         }
 
-    RETURN_TYPES = (IO.IMAGE,)
-    RETURN_NAMES = ("image",)
+    RETURN_TYPES = (
+        IO.IMAGE,
+        IO.IMAGE,
+    )
+    RETURN_NAMES = ("first_frame", "last_frame")
     FUNCTION = "extract_frame"
     CATEGORY = "xzuynodes"
 
@@ -46,20 +55,27 @@ class FirstLastFrameXZ(ComfyNodeABC):
         path = folder_paths.get_annotated_filepath(file)
         video = VideoFromFile(path)
         frames = video.get_components().images
+
         try:
             length = len(frames)
         except Exception:
             frames = [frames]
             length = 1
+
         if length == 0:
             raise ValueError(f"Video '{file}' has no frames.")
 
-        raw = frames[0] if first_or_last == "first" else frames[-1]
+        first_frame, last_frame = frames[0], frames[-1]
 
-        if raw.dim() == 3:
-            return (raw.unsqueeze(0),)
-        else:
-            return (raw,)
+        if first_frame.dim() == 3:
+            first_frame = first_frame.unsqueeze(0)
+        if last_frame.dim() == 3:
+            last_frame = last_frame.unsqueeze(0)
+
+        return (
+            first_frame,
+            last_frame,
+        )
 
 
 class ImageResizeKJ:
@@ -1257,6 +1273,62 @@ class VAEDecodeTiledXZ:
         return (images,)
 
 
+class SelfGuidance(io.ComfyNode):
+    @classmethod
+    def define_schema(cls):
+        return io.Schema(
+            node_id="SelfGuidance",
+            display_name="Self-Guidance",
+            category="_for_testing",
+            inputs=[
+                io.Model.Input("model"),
+                io.Float.Input(
+                    "guidance_scale",
+                    default=1.0,
+                    min=-5.0,
+                    max=20.0,
+                    step=0.001,
+                    tooltip="The strength of the self-guidance (omega). Higher values suppress artifacts more aggressively.",
+                ),
+                io.Float.Input(
+                    "sigma_shift_factor",
+                    default=0.01,
+                    min=0.0,
+                    max=5.0,
+                    step=0.001,
+                    tooltip="Determines the noisier level (delta). 0.2 means the shifted level is 20% noisier (sigma * 1.2).",
+                ),
+            ],
+            outputs=[
+                io.Model.Output(),
+            ],
+            is_experimental=True,
+        )
+
+    @classmethod
+    def execute(cls, model, guidance_scale, sigma_shift_factor):
+        m = model.clone()
+
+        def post_cfg_function(args):
+            model = args["model"]
+            denoised = args["denoised"]
+            sigma = args["sigma"]
+            x = args["input"]
+            model_options = args["model_options"]
+            cond = args["cond"]
+            cond_pred = args.get("cond_denoised", denoised)
+
+            (shifted_pred,) = comfy.samplers.calc_cond_batch(
+                model, [cond], x, (sigma * (1.0 + sigma_shift_factor)), model_options
+            )
+
+            return denoised + (cond_pred - shifted_pred) * guidance_scale
+
+        m.set_model_sampler_post_cfg_function(post_cfg_function)
+
+        return io.NodeOutput(m)
+
+
 NODE_CLASS_MAPPINGS = {
     "FirstLastFrameXZ": FirstLastFrameXZ,
     "ImageResizeKJ": ImageResizeKJ,
@@ -1270,6 +1342,7 @@ NODE_CLASS_MAPPINGS = {
     "TextEncodeQwenImageEditSimpleXZ": TextEncodeQwenImageEditSimpleXZ,
     "VAEDecodeXZ": VAEDecodeXZ,
     "VAEDecodeTiledXZ": VAEDecodeTiledXZ,
+    "SelfGuidance": SelfGuidance,
 }
 NODE_DISPLAY_NAME_MAPPINGS = {
     "FirstLastFrameXZ": "First/Last Frame (XZ)",
@@ -1284,4 +1357,5 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "TextEncodeQwenImageEditSimpleXZ": "TextEncodeQwenImageEditSimple (XZ)",
     "VAEDecodeXZ": "VAEDecode (XZ)",
     "VAEDecodeTiledXZ": "VAEDecodeTiled (XZ)",
+    "SelfGuidance": "Self-Guidance",
 }
