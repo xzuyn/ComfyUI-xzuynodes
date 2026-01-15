@@ -1273,30 +1273,49 @@ class VAEDecodeTiledXZ:
         return (images,)
 
 
-class SelfGuidance(io.ComfyNode):
+class SelfGuidanceXZ(io.ComfyNode):
     @classmethod
     def define_schema(cls):
         return io.Schema(
-            node_id="SelfGuidance",
-            display_name="Self-Guidance",
-            category="_for_testing",
+            node_id="SelfGuidanceXZ",
+            display_name="Self-Guidance (XZ)",
+            category="xzuynodes",
             inputs=[
                 io.Model.Input("model"),
                 io.Float.Input(
                     "guidance_scale",
                     default=1.0,
-                    min=-5.0,
-                    max=20.0,
-                    step=0.001,
-                    tooltip="The strength of the self-guidance (omega). Higher values suppress artifacts more aggressively.",
+                    min=-100.0,
+                    max=100.0,
+                    step=0.01,
+                    tooltip=(
+                        "The strength of self-guidance (ω in paper).\n"
+                        "Paper uses 1-7, typically 3.\n"
+                        "Higher values suppress artifacts more but may reduce diversity."
+                    ),
+                ),
+                io.Combo.Input(
+                    "shift_mode",
+                    default="multiplicative",
+                    options=["multiplicative", "additive", "dynamic"],
+                    tooltip=(
+                        "How to shift the noise level:\n"
+                        "- multiplicative (sigma * factor)\n"
+                        "- additive (sigma + amount)\n"
+                        "- dynamic (decreases as denoising progresses)"
+                    ),
                 ),
                 io.Float.Input(
-                    "sigma_shift_factor",
+                    "shift_amount",
                     default=0.01,
-                    min=0.0,
-                    max=5.0,
+                    min=-100.0,
+                    max=100.0,
                     step=0.001,
-                    tooltip="Determines the noisier level (delta). 0.2 means the shifted level is 20% noisier (sigma * 1.2).",
+                    tooltip=(
+                        "Multiplicative: factor to multiply sigma (0.03 = 3% noisier).\n"
+                        "Additive: absolute amount to add.\n"
+                        "Dynamic: division factor (σ parameter)."
+                    ),
                 ),
             ],
             outputs=[
@@ -1306,7 +1325,7 @@ class SelfGuidance(io.ComfyNode):
         )
 
     @classmethod
-    def execute(cls, model, guidance_scale, sigma_shift_factor):
+    def execute(cls, model, guidance_scale, shift_mode, shift_amount):
         m = model.clone()
 
         def post_cfg_function(args):
@@ -1318,14 +1337,30 @@ class SelfGuidance(io.ComfyNode):
             cond = args["cond"]
             cond_pred = args.get("cond_denoised", denoised)
 
-            (shifted_pred,) = comfy.samplers.calc_cond_batch(
-                model, [cond], x, (sigma * (1.0 + sigma_shift_factor)), model_options
-            )
+            if shift_mode == "multiplicative":
+                shifted_sigma = sigma * (1.0 + shift_amount)
+            elif shift_mode == "additive":
+                shifted_sigma = sigma + shift_amount
+            else:  # dynamic
+                shifted_sigma = sigma * (1.0 + sigma / shift_amount)
 
-            return denoised + (cond_pred - shifted_pred) * guidance_scale
+            shifted_sigma = shifted_sigma.clamp(min=model.model_sampling.sigma_min, max=model.model_sampling.sigma_max)
+            
+            if shifted_sigma != sigma:
+                (shifted_pred,) = comfy.samplers.calc_cond_batch(
+                    model, [cond], x, shifted_sigma, model_options
+                )
+
+                if guidance_scale != 1.0:
+                    sg_correction = (cond_pred - shifted_pred) * guidance_scale
+                else:
+                    sg_correction = (cond_pred - shifted_pred)
+                
+                return denoised + sg_correction
+            else:
+                return denoised
 
         m.set_model_sampler_post_cfg_function(post_cfg_function)
-
         return io.NodeOutput(m)
 
 
@@ -1342,7 +1377,7 @@ NODE_CLASS_MAPPINGS = {
     "TextEncodeQwenImageEditSimpleXZ": TextEncodeQwenImageEditSimpleXZ,
     "VAEDecodeXZ": VAEDecodeXZ,
     "VAEDecodeTiledXZ": VAEDecodeTiledXZ,
-    "SelfGuidance": SelfGuidance,
+    "SelfGuidanceXZ": SelfGuidanceXZ,
 }
 NODE_DISPLAY_NAME_MAPPINGS = {
     "FirstLastFrameXZ": "First/Last Frame (XZ)",
@@ -1357,5 +1392,5 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "TextEncodeQwenImageEditSimpleXZ": "TextEncodeQwenImageEditSimple (XZ)",
     "VAEDecodeXZ": "VAEDecode (XZ)",
     "VAEDecodeTiledXZ": "VAEDecodeTiled (XZ)",
-    "SelfGuidance": "Self-Guidance",
+    "SelfGuidanceXZ": "Self-Guidance (XZ)",
 }
