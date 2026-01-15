@@ -1297,12 +1297,15 @@ class SelfGuidanceXZ(io.ComfyNode):
                 io.Combo.Input(
                     "shift_mode",
                     default="multiplicative",
-                    options=["multiplicative", "additive", "dynamic"],
+                    options=["multiplicative", "additive", "dynamic", "sample_steps", "previous_step", "sg_prev"],
                     tooltip=(
                         "How to shift the noise level:\n"
                         "- multiplicative (sigma * factor)\n"
                         "- additive (sigma + amount)\n"
-                        "- dynamic (decreases as denoising progresses)"
+                        "- dynamic (decreases as denoising progresses)\n"
+                        "- sample_steps (sigma + (sigma_max / amount))\n"
+                        "- previous_step (uses previous sigma value)\n"
+                        "- sg_prev (uses the previous prediction)"
                     ),
                 ),
                 io.Float.Input(
@@ -1314,7 +1317,10 @@ class SelfGuidanceXZ(io.ComfyNode):
                     tooltip=(
                         "Multiplicative: factor to multiply sigma (0.03 = 3% noisier).\n"
                         "Additive: absolute amount to add.\n"
-                        "Dynamic: division factor (σ parameter)."
+                        "Dynamic: division factor (σ parameter).\n"
+                        "Sample Steps: shifts sigma by approximately one sampler step.\n"
+                        "Previous Step: uses the previous step's sigma as the shifted sigma (no-op).\n"
+                        "SG-Prev: uses the previous prediction to save time (no-op)."
                     ),
                 ),
             ],
@@ -1327,6 +1333,7 @@ class SelfGuidanceXZ(io.ComfyNode):
     @classmethod
     def execute(cls, model, guidance_scale, shift_mode, shift_amount):
         m = model.clone()
+        history = {"last_sigma": None, "last_pred": None}
 
         def post_cfg_function(args):
             model = args["model"]
@@ -1341,6 +1348,30 @@ class SelfGuidanceXZ(io.ComfyNode):
                 shifted_sigma = sigma * (1.0 + shift_amount)
             elif shift_mode == "additive":
                 shifted_sigma = sigma + shift_amount
+            elif shift_mode == "sample_steps":
+                shifted_sigma = sigma + (model.model_sampling.sigma_max / shift_amount)
+            elif shift_mode == "previous_step":
+                if history["last_sigma"] is not None:
+                    shifted_sigma = history["last_sigma"]
+                    history["last_sigma"] = sigma.detach().clone()
+                else:
+                    history["last_sigma"] = sigma.detach().clone()
+                    return denoised
+            elif shift_mode == "sg_prev":
+                if history["last_pred"] is not None:
+                    shifted_pred = history["last_pred"]
+
+                    if guidance_scale != 1.0:
+                        sg_correction = (cond_pred - shifted_pred) * guidance_scale
+                    else:
+                        sg_correction = (cond_pred - shifted_pred)
+
+                    history["last_pred"] = cond_pred.detach().clone()
+
+                    return denoised + sg_correction
+                else:
+                    history["last_pred"] = cond_pred.detach().clone()
+                    return denoised
             else:  # dynamic
                 shifted_sigma = sigma * (1.0 + sigma / shift_amount)
 
