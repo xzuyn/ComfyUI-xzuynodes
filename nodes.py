@@ -1291,7 +1291,8 @@ class SelfGuidanceXZ(io.ComfyNode):
                     tooltip=(
                         "The strength of self-guidance (ω in paper).\n"
                         "Paper uses 1-7, typically 3.\n"
-                        "Higher values suppress artifacts more but may reduce diversity."
+                        "Higher values suppress artifacts more but may reduce diversity.\n"
+                        "0 will disable guidance."
                     ),
                 ),
                 io.Combo.Input(
@@ -1336,6 +1337,7 @@ class SelfGuidanceXZ(io.ComfyNode):
         history = {"last_sigma": None, "last_pred": None}
 
         def post_cfg_function(args):
+            nonlocal history
             model = args["model"]
             denoised = args["denoised"]
             sigma = args["sigma"]
@@ -1343,6 +1345,13 @@ class SelfGuidanceXZ(io.ComfyNode):
             model_options = args["model_options"]
             cond = args["cond"]
             cond_pred = args.get("cond_denoised", denoised)
+            
+            if guidance_scale == 0.0:
+                return denoised
+
+            if history["last_sigma"] is not None and sigma > history["last_sigma"]:
+                history["last_pred"] = None
+                history["last_sigma"] = None
 
             if shift_mode == "multiplicative":
                 shifted_sigma = sigma * (1.0 + shift_amount)
@@ -1359,33 +1368,25 @@ class SelfGuidanceXZ(io.ComfyNode):
                     return denoised
             elif shift_mode == "sg_prev":
                 if history["last_pred"] is not None:
-                    shifted_pred = history["last_pred"]
-
-                    if guidance_scale != 1.0:
-                        sg_correction = (cond_pred - shifted_pred) * guidance_scale
-                    else:
-                        sg_correction = (cond_pred - shifted_pred)
-
+                    sg_correction = (cond_pred - history["last_pred"]) * guidance_scale
                     history["last_pred"] = cond_pred.detach().clone()
-
+                    history["last_sigma"] = sigma.detach().clone()
                     return denoised + sg_correction
                 else:
                     history["last_pred"] = cond_pred.detach().clone()
+                    history["last_sigma"] = sigma.detach().clone()
                     return denoised
             else:  # dynamic
                 shifted_sigma = sigma * (1.0 + sigma / shift_amount)
 
             shifted_sigma = shifted_sigma.clamp(min=model.model_sampling.sigma_min, max=model.model_sampling.sigma_max)
-            
-            if shifted_sigma != sigma:
+            if not torch.equal(shifted_sigma, sigma):
                 (shifted_pred,) = comfy.samplers.calc_cond_batch(
                     model, [cond], x, shifted_sigma, model_options
                 )
-
-                if guidance_scale != 1.0:
-                    sg_correction = (cond_pred - shifted_pred) * guidance_scale
-                else:
-                    sg_correction = (cond_pred - shifted_pred)
+                sg_correction = (cond_pred - shifted_pred) * guidance_scale
+                history["last_sigma"] = sigma.detach().clone()
+                history["last_pred"] = cond_pred.detach().clone()
                 
                 return denoised + sg_correction
             else:
