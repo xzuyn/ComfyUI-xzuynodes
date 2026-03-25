@@ -1396,6 +1396,65 @@ class SelfGuidanceXZ(io.ComfyNode):
         return io.NodeOutput(m)
 
 
+# https://github.com/Comfy-Org/ComfyUI/blob/be518db5a7daa6010fb1c312c0832b9833a71d10/comfy_extras/nodes_model_advanced.py#L140
+class ModelSamplingFlux2XZ(ModelSamplingSD3):
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "model": ("MODEL",),
+                "width": (
+                    "INT",
+                    {
+                        "default": 1024,
+                        "min": 16,
+                        "max": MAX_RESOLUTION,
+                        "step": 16,
+                    },
+                ),
+                "height": (
+                    "INT",
+                    {
+                        "default": 1024,
+                        "min": 16,
+                        "max": MAX_RESOLUTION,
+                        "step": 16,
+                    },
+                ),
+                "steps": (
+                    "INT",
+                    {
+                        "default": 50,
+                        "min": 1,
+                        "step": 1,
+                    },
+                ),
+            }
+        }
+
+    FUNCTION = "patch_flux2"
+    CATEGORY = "xzuynodes"
+
+    def patch_flux2(self, model, width, height, steps):
+        seq_len = (height // 16) * (width // 16)
+
+        a1, b1 = 8.73809524e-05, 1.89833333
+        a2, b2 = 0.00016927, 0.45666666
+
+        if seq_len > 4300:
+            mu = a2 * seq_len + b2
+        else:
+            m_10 = a1 * seq_len + b1
+            m_200 = a2 * seq_len + b2
+            mu = m_10 + (m_200 - m_10) * (steps - 10) / 190.0
+
+        return self.patch(
+            model,
+            mu,
+            multiplier=1.0,
+        )
+
+
 NODE_CLASS_MAPPINGS = {
     "FirstLastFrameXZ": FirstLastFrameXZ,
     "ImageResizeKJ": ImageResizeKJ,
@@ -1410,6 +1469,7 @@ NODE_CLASS_MAPPINGS = {
     "VAEDecodeXZ": VAEDecodeXZ,
     "VAEDecodeTiledXZ": VAEDecodeTiledXZ,
     "SelfGuidanceXZ": SelfGuidanceXZ,
+    "ModelSamplingFlux2XZ": ModelSamplingFlux2XZ,
 }
 NODE_DISPLAY_NAME_MAPPINGS = {
     "FirstLastFrameXZ": "First/Last Frame (XZ)",
@@ -1425,4 +1485,5 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "VAEDecodeXZ": "VAEDecode (XZ)",
     "VAEDecodeTiledXZ": "VAEDecodeTiled (XZ)",
     "SelfGuidanceXZ": "Self-Guidance (XZ)",
+    "ModelSamplingFlux2XZ": "ModelSamplingFlux2 (XZ)",
 }
