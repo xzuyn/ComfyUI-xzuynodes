@@ -1436,21 +1436,13 @@ class ModelSamplingFlux2XZ(ModelSamplingSD3):
     CATEGORY = "xzuynodes"
 
     def patch_flux2(self, model, width, height, steps):
-        # https://github.com/black-forest-labs/flux2/blob/50fe5162777813d869182b139e83b10743caef15/src/flux2/sampling.py#L251-L266
-        seq_len = (height // 16) * (width // 16)
-        a1, b1 = 8.73809524e-05, 1.89833333
-        a2, b2 = 0.00016927, 0.45666666
-
-        if seq_len > 4300:
-            mu = a2 * seq_len + b2
-        else:
-            m_10 = a1 * seq_len + b1
-            m_200 = a2 * seq_len + b2
-            mu = m_10 + (m_200 - m_10) * (steps - 10) / 190.0
-
+        # modified from: https://github.com/black-forest-labs/flux2/blob/50fe5162777813d869182b139e83b10743caef15/src/flux2/sampling.py#L251-L266
+        seq_len = (width // 16) * (height // 16)
+        t = 1.0 if seq_len > 4300 else (steps - 10) / 190.0
         return self.patch(
             model,
-            mu,
+            # (a1 + ((a2 - a1) * t)) * seq_len + (b1 - ((b1 - b2) * t))
+            float((8.73809524e-05 + (8.18890476e-05 * t)) * seq_len + (1.89833333 - (1.44166667 * t))),
             multiplier=1.0,
         )
 
