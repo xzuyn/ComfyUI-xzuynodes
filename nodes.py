@@ -1061,9 +1061,9 @@ class VAEEncode:
     def encode(self, vae, pixels, disable_cudnn=True):
         if disable_cudnn:
             with torch.backends.cudnn.flags(enabled=False):
-                t = vae.encode(pixels[:, :, :, :3])
+                t = vae.encode(pixels)
         else:
-            t = vae.encode(pixels[:, :, :, :3])
+            t = vae.encode(pixels)
 
         return ({"samples": t},)
 
@@ -1122,7 +1122,7 @@ class VAEEncodeTiled:
         if disable_cudnn:
             with torch.backends.cudnn.flags(enabled=False):
                 t = vae.encode_tiled(
-                    pixels[:, :, :, :3],
+                    pixels,
                     tile_x=tile_size,
                     tile_y=tile_size,
                     overlap=overlap,
@@ -1131,7 +1131,7 @@ class VAEEncodeTiled:
                 )
         else:
             t = vae.encode_tiled(
-                pixels[:, :, :, :3],
+                pixels,
                 tile_x=tile_size,
                 tile_y=tile_size,
                 overlap=overlap,
