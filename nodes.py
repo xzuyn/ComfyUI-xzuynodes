@@ -1042,7 +1042,7 @@ class TextEncodeQwenImageEditSimpleXZ:
         )
 
 
-class VAEEncode:
+class VAEEncodeXZ:
     @classmethod
     def INPUT_TYPES(s):
         return {
@@ -1068,7 +1068,7 @@ class VAEEncode:
         return ({"samples": t},)
 
 
-class VAEEncodeTiled:
+class VAEEncodeTiledXZ:
     @classmethod
     def INPUT_TYPES(s):
         return {
@@ -1458,7 +1458,9 @@ NODE_CLASS_MAPPINGS = {
     "WanImageToVideoXZ": WanImageToVideoXZ,
     "TextEncodeQwenImageEditXZ": TextEncodeQwenImageEditXZ,
     "TextEncodeQwenImageEditSimpleXZ": TextEncodeQwenImageEditSimpleXZ,
+    "VAEEncodeXZ": VAEEncodeXZ,
     "VAEDecodeXZ": VAEDecodeXZ,
+    "VAEEncodeTiledXZ": VAEEncodeTiledXZ,
     "VAEDecodeTiledXZ": VAEDecodeTiledXZ,
     "SelfGuidanceXZ": SelfGuidanceXZ,
     "ModelSamplingFlux2XZ": ModelSamplingFlux2XZ,
@@ -1474,7 +1476,9 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "WanImageToVideoXZ": "WanImageToVideo (XZ)",
     "TextEncodeQwenImageEditXZ": "TextEncodeQwenImageEdit (XZ)",
     "TextEncodeQwenImageEditSimpleXZ": "TextEncodeQwenImageEditSimple (XZ)",
+    "VAEEncodeXZ": "VAEDecode (XZ)",
     "VAEDecodeXZ": "VAEDecode (XZ)",
+    "VAEEncodeTiledXZ": "VAEEncodeTiled (XZ)",
     "VAEDecodeTiledXZ": "VAEDecodeTiled (XZ)",
     "SelfGuidanceXZ": "Self-Guidance (XZ)",
     "ModelSamplingFlux2XZ": "ModelSamplingFlux2 (XZ)",
